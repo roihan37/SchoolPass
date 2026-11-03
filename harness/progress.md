@@ -1,11 +1,85 @@
 # SchoolPass Progress Log
 
 ## Current phase
-02 - Authentication and Authorization (IMPLEMENTED AND VERIFIED, 2026-11-03)
+03 - Leave Request Backend Workflow (IMPLEMENTED AND VERIFIED, 2026-11-03).
+Phase berikutnya belum dimulai. Tidak ada commit atau push.
+Catatan refactor dan Phase 00–02 di bawah merupakan riwayat.
 
-Refactor struktur backend setelah Phase 02: IMPLEMENTED AND VERIFIED, 2026-11-03.
-Phase 03 belum dimulai. Catatan Phase 02 dan fase sebelumnya di bawah merupakan
-riwayat; path source terkini mengikuti bagian refactor berikut.
+## Phase 03 — changes and decisions
+- Baseline awal HEAD `71c4f83` bersih tetapi typecheck gagal TS2307 pada
+  controller duplikat `server/src/auth/auth.controller.ts` (import service,
+  decorator, dan DTO yang sudah pindah). Pengguna menyetujui perbaikan baseline:
+  controller lama dihapus; controller aktif di `src/modules/auth/` dipertahankan.
+  `server/AGENTS.md` diselaraskan dengan scope Phase 03 yang disetujui.
+- Menambah LeaveRequestsModule/service/controller dan DTO di
+  `server/src/modules/leave-requests/`, dirangkai melalui AppModule.
+  Controller menangani HTTP/validasi; service mengatur akses dan aturan bisnis;
+  PrismaModule menyediakan koneksi melalui dependency injection eksplisit.
+- POST Parent menerima studentId, tanggal kalender YYYY-MM-DD, SICK/PERMISSION,
+  dan alasan. Identitas pengaju berasal dari guard; status awal memakai default
+  PENDING database. Tanggal disimpan UTC midnight untuk kolom DATE dan dikirim
+  sebagai YYYY-MM-DD agar tidak bergeser karena zona waktu.
+- GET list/detail memfilter kepemilikan Parent sekaligus pengaju, atau kelas
+  Teacher pada query database. Resource tidak ditemukan maupun di luar akses
+  menghasilkan 404; role salah 403. Respons hanya scalar LeaveRequest, tanpa
+  relasi User/password/token. Query klien tidak dapat memperluas scope akses.
+- Constraint UNIQUE(studentId, absenceDate) yang sudah ada dipakai langsung;
+  error Prisma P2002 menjadi 409, termasuk pengajuan bersamaan. Tidak perlu
+  dependency, perubahan schema, ataupun migrasi baru; Prisma tetap 7.10.1.
+- Keputusan Teacher menggunakan updateMany bersyarat status PENDING dan kelas
+  yang ditugaskan. Count nol menghasilkan 409; transaksi menyatukan update dan
+  pembacaan hasil. Transaksi tanpa syarat PENDING tidak cukup mencegah overwrite.
+  Reviewer/waktu berasal dari server; penolakan wajib alasan, approval opsional.
+  Retry terhadap keputusan final menghasilkan 409 tanpa perubahan data.
+- DTO menolak field tambahan, UUID/tanggal/enum tidak valid, alasan kosong/null;
+  alasan maksimal 2000 karakter dan dipangkas saat disimpan. Batas panjang ini
+  adalah pilihan validasi defensif, didokumentasikan di API; tidak menambah
+  batas tanggal lampau/mendatang yang belum diminta.
+- Menambah 44 tes PostgreSQL + HTTP nyata: alur positif, validasi, JWT/role,
+  kepemilikan dan kelas, list/detail, duplikasi dan keputusan final termasuk race.
+  Menggunakan database terpisah `_test`, UUID dan akun fiktif; cleanup hanya
+  fixture sendiri. Tidak menyentuh data produksi atau mengubah seed lokal.
+- README dan docs/API.md/ARCHITECTURE.md diperbarui dengan kontrak, struktur,
+  contoh curl dan batasan. Mengikuti dokumentasi resmi Prisma Client v7 dan
+  Nest ValidationPipe (tautan pada docs/API.md).
+
+## Phase 03 — actual verification
+Perintah npm dijalankan dari `server/`, Node 24.18.1/npm 11.16.0.
+
+| Command | Result |
+|---|---|
+| `npx prettier --write test/leave-requests.db-spec.ts` | PASS; format akhir diperbaiki |
+| `npx prettier --check src/modules/leave-requests src/app.module.ts test/leave-requests.db-spec.ts` | PASS |
+| `npm run lint` | PASS; 36 files, 0 errors/warnings |
+| `npx tsc --noEmit` | PASS |
+| `npx tsc --noEmit -p tsconfig.tools.json` | PASS |
+| `npm test` | PASS; 13 tests, 4 files |
+| `npm run test:e2e` | PASS akhir; 4 tests, 1 file, termasuk GET /api/v1/health |
+| `npm run test:db` | PASS akhir; 74 tests, 3 files (44 tes workflow baru); Prisma generate/tooling build/migrate deploy berhasil; tidak ada pending migration |
+| `npm run build` | PASS; Prisma generate 7.10.1 dan Nest build |
+| `docker compose ps` dari root | PASS; PostgreSQL healthy pada 127.0.0.1:55432 |
+| `git diff --check` dan review seluruh perubahan/file baru | PASS; hanya scope Phase 03 dan perbaikan baseline yang disetujui, tanpa secret/dependency/schema baru |
+
+Seluruh acceptance criteria TASK 03 terverifikasi: pengajuan anak sendiri,
+penolakan akses anak/kelas lain, duplikasi termasuk race, hanya satu keputusan
+final termasuk race, alasan penolakan, serta isolasi list/detail.
+
+## Phase 03 — failures and limitations
+- Baseline TS2307 di controller lama diselesaikan setelah persetujuan pengguna.
+  Typecheck tes baru sempat FAIL TS2345 karena helper body bertipe unknown;
+  diperbaiki menjadi object. Lint awal memiliki dua warning sort angka tanpa
+  comparator; comparator ditambahkan. Prettier sempat FAIL pada file tes baru;
+  format diperbaiki dan check akhir PASS.
+- Percobaan test:db awal FAIL `connect EPERM 127.0.0.1:55432`; test:e2e awal
+  FAIL `listen EPERM: operation not permitted 127.0.0.1`. Keduanya diulang dengan
+  izin akses lokal di luar sandbox dan PASS; tidak mengubah konfigurasi aplikasi
+  untuk melewati pemeriksaan keamanan.
+- Tidak menambah pagination/filter, perubahan ownership/class, frontend, MinIO,
+  Redis, BullMQ, worker, ataupun fase lain. Client dan dependency tidak berubah;
+  pemeriksaan client/audit dependency tidak diulang. Riwayat audit Phase 02 tetap
+  berlaku sebagai catatan sebelumnya, bukan hasil audit baru.
+- Belum ada load test atau klaim kesiapan produksi. Perubahan selesai untuk
+  review; fase selanjutnya memerlukan instruksi pengguna.
 
 ## Backend structure refactor — changes and decisions
 - Rencana struktur mendapat persetujuan eksplisit pengguna; working tree bersih

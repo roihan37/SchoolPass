@@ -17,8 +17,8 @@ NestJS also calls MinIO object storage and Redis; BullMQ worker process consumes
 ## Backend boundaries
 Thin controllers, services own business logic, centralized Prisma access, DTO validation, guards plus record-level authorization in services. No external production credentials.
 
-### Backend layout (implemented through Phase 02)
-- `server/src/modules/`: feature modules `auth`, `students`, and operational `health`.
+### Backend layout (implemented through Phase 03)
+- `server/src/modules/`: feature modules `auth`, `students`, `leave-requests`, and operational `health`.
   Controllers handle HTTP; services own business rules and record-level authorization.
   Login DTO lives in `auth/dto/`; unit tests live beside their tested components.
 - `server/src/infrastructure/database/`: PrismaModule, PrismaService, and database
@@ -36,6 +36,10 @@ Thin controllers, services own business logic, centralized Prisma access, DTO va
   beside the infrastructure helper.
 - `server/src/app.module.ts` composes feature modules; `main.ts` bootstraps the API.
   No generic repository/base-service layer or catch-all CommonModule is required.
+- LeaveRequestsModule imports PrismaModule explicitly. Its service scopes reads
+  by parent ownership or assigned class, maps unique violations to HTTP 409, and
+  performs final decisions with a PENDING-conditional update inside a transaction.
+  Existing database constraints are reused; Phase 03 needs no new migration.
 
 ### API and worker processes (future queue phase)
 The API remains the only implemented application process. When the queue phase is

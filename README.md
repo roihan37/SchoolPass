@@ -1,13 +1,14 @@
 # SchoolPass
 
-Fondasi Phase 00–02: React + TypeScript + Vite di `client/`, NestJS + TypeScript di
+Fondasi Phase 00–03: React + TypeScript + Vite di `client/`, NestJS + TypeScript di
 `server/`, dan PostgreSQL sebagai satu-satunya service Docker Compose. Phase 01
 menambahkan empat model Prisma, migrasi, seed fiktif, dan provider database Nest.
 Phase 02 menambahkan login JWT serta akses anak sesuai role dan kepemilikan.
+Phase 03 menambahkan backend pengajuan izin dan keputusan final guru.
 
 ## Struktur backend
 
-- `server/src/modules/`: fitur `auth`, `students`, dan `health`; controller tipis,
+- `server/src/modules/`: fitur `auth`, `students`, `leave-requests`, dan `health`; controller tipis,
   business logic dan pemeriksaan kepemilikan di service. DTO berada di fitur terkait.
 - `server/src/infrastructure/database/`: provider Prisma dan konfigurasi database.
 - `server/src/common/`: guard/decorator/identitas bersama dan utility password
@@ -308,9 +309,50 @@ rusak/kedaluwarsa, pembatasan role, dan pemisahan anak antar-parent.
 Belum ada refresh token, logout/revocation list, atau pembatasan percobaan login;
 fitur ini perlu dirancang sebelum penggunaan di luar demo lokal.
 
+## Workflow izin — Phase 03
+
+Jalankan PostgreSQL dan API dengan perintah lokal di atas. Login sebagai Parent
+dan Teacher menggunakan panduan Phase 02; simpan JWT masing-masing sebagai
+`PARENT_TOKEN` dan `TEACHER_TOKEN` di shell lokal (jangan simpan token di Git).
+Isi `STUDENT_ID` dari `/students/mine`. Contoh dengan API pada port 3001:
+
+```bash
+curl -i http://127.0.0.1:3001/api/v1/leave-requests \
+  -H "Authorization: Bearer $PARENT_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data "{\"studentId\":\"$STUDENT_ID\",\"absenceDate\":\"2026-11-04\",\"type\":\"SICK\",\"reason\":\"Demam fiktif\"}"
+
+curl -fsS http://127.0.0.1:3001/api/v1/leave-requests \
+  -H "Authorization: Bearer $TEACHER_TOKEN"
+
+# Isi LEAVE_ID dari respons pengajuan/list.
+curl -i -X PATCH "http://127.0.0.1:3001/api/v1/leave-requests/$LEAVE_ID/decision" \
+  -H "Authorization: Bearer $TEACHER_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"status":"APPROVED"}'
+
+curl -fsS "http://127.0.0.1:3001/api/v1/leave-requests/$LEAVE_ID" \
+  -H "Authorization: Bearer $PARENT_TOKEN"
+```
+
+Parent hanya dapat mengajukan/melihat permintaannya untuk anak sendiri; guru
+hanya kelasnya. Resource di luar akses menghasilkan 404, role salah 403,
+validasi 400, JWT tidak valid 401, duplikasi/keputusan ulang 409. Keputusan final
+tidak dapat dibalik; penolakan wajib alasan. Detail format tanggal, respons,
+dan batas alasan tersedia di [kontrak API](docs/API.md#phase-03--implemented-leave-workflow).
+List belum memakai pagination/filter. Tidak ada fitur frontend atau layanan P1.
+Perintah verifikasi server tetap seperti bagian sebelumnya; `test:db` juga
+menguji HTTP workflow izin dan race create/decision terhadap PostgreSQL `_test`.
+
 ## Hasil dan batasan
 
-Phase 02: format, lint, type check, build server lulus; 13 unit test, 4 tes HTTP,
+Phase 03: format, lint (0 warning/error), typecheck aplikasi/tooling, dan build
+server lulus; 13 unit test, 4 tes e2e (termasuk health), serta 74 tes database/HTTP
+lulus. Tes database mencakup 44 tes workflow izin baru dan kasus konkurensi.
+Tidak ada perubahan dependency, schema/migrasi atau client. List belum memakai
+pagination; frontend dan layanan P1 belum diimplementasikan pada fase ini.
+
+Riwayat Phase 02: format, lint, type check, build server lulus; 13 unit test, 4 tes HTTP,
 dan 30 tes PostgreSQL/HTTP lulus. Login akun seed lama dan health hasil build HTTP
 200 terverifikasi; kasus 401/403 juga lulus. Client tidak berubah; lint/build
 client diulang dan lulus. Tidak ada perubahan schema/migrasi. Detail perintah dan kegagalan awal
@@ -326,4 +368,4 @@ diizinkan. Generate/migrate/seed/build/test tetap berhasil pada lingkungan ini;
 unduhan engine pertama memerlukan akses jaringan.
 
 Panduan proyek: [AGENTS.md](AGENTS.md), [arsitektur](docs/ARCHITECTURE.md), dan
-[tugas Phase 02](harness/tasks/02-auth.md). Phase berikutnya menunggu persetujuan.
+[tugas Phase 03](harness/tasks/03-leave-backend.md). Phase berikutnya menunggu persetujuan.

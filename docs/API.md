@@ -41,4 +41,43 @@ Example decision: PATCH /leave-requests/:id/decision JSON `{ "status": "REJECTED
   `schoolpass-api`, dan UUID subject. Masa berlaku 900 detik. Role terbaru dibaca dari
   database, bukan dipercaya dari klaim role token. JWT hilang/tidak valid => 401.
 - Tidak ada registrasi, refresh token, atau endpoint logout pada fase ini.
-  Endpoint leave request dan seluruh endpoint P1 pada tabel belum diimplementasikan.
+  Seluruh endpoint P1 pada tabel belum diimplementasikan.
+
+## Phase 03 — implemented leave workflow
+
+- `POST /leave-requests`: Parent saja; body sesuai contoh di atas, tanpa field
+  tambahan. `studentId` harus UUID; `absenceDate` tanggal kalender valid dalam
+  format `YYYY-MM-DD` (tahun 0001–9999, tanpa waktu/zona waktu); `type` hanya
+  SICK/PERMISSION. `reason` string berisi karakter non-whitespace, maksimal
+  2000 karakter; spasi awal/akhir dipangkas saat disimpan. Belum ada pembatasan
+  tanggal lampau/mendatang. Berhasil 201, status awal PENDING.
+- `GET /leave-requests`: 200 array, urutan `createdAt` descending lalu `id`
+  ascending. Parent hanya melihat permintaan yang ia ajukan untuk anak yang
+  masih dimilikinya; Teacher hanya kelas yang ditugaskan kepadanya. Tanpa data
+  menghasilkan `[]`. Belum ada pagination/filter; query parameter tidak dapat
+  mengganti identitas atau memperluas akses.
+- `GET /leave-requests/:id`: 200 dengan satu objek, menggunakan batas akses yang
+  sama dengan list. Parameter `id` harus UUID, selain itu 400.
+- Objek respons berisi field scalar LeaveRequest: `id`, `studentId`,
+  `submittedById`, `absenceDate` (YYYY-MM-DD), `type`, `reason`, `status`,
+  `reviewedById`, `decisionReason`, `reviewedAt`, `createdAt`. Dua field waktu
+  menggunakan ISO UTC; ketiga field review bernilai null sebelum diputuskan.
+  Tidak menyertakan objek User, email, hash, atau token.
+- `PATCH /leave-requests/:id/decision`: Teacher saja; `status` wajib APPROVED
+  atau REJECTED. REJECTED wajib `decisionReason`; APPROVED boleh tanpa alasan.
+  Jika dikirim, alasan harus string non-whitespace maksimal 2000 karakter,
+  bukan null; spasi awal/akhir dipangkas. Field tambahan ditolak. Berhasil 200
+  dengan objek final, reviewer dari identitas server dan waktu review dari server.
+- JWT hilang/tidak valid => 401; role salah => 403. Student/request yang tidak
+  ada maupun di luar kepemilikan/kelas => 404 dengan pesan yang sama untuk
+  masing-masing jenis resource, agar tidak mengungkap keberadaan data.
+- Constraint UNIQUE(studentId, absenceDate) menghasilkan 409 untuk duplikasi,
+  termasuk create bersamaan atau setelah request final. Keputusan final memakai
+  conditional update `status = PENDING`; keputusan ulang/konkuren yang kalah
+  menghasilkan 409. Transaksi menjaga update dan pembacaan hasil bersama;
+  transaksi saja tanpa conditional update tidak cukup mencegah overwrite.
+
+Implementasi mempertahankan Prisma 7.10.1 dan mengikuti referensi resmi
+[Prisma Client v7](https://www.prisma.io/docs/orm/v7/reference/prisma-client-reference)
+untuk updateMany dan P2002, serta
+[ValidationPipe NestJS](https://docs.nestjs.com/techniques/validation).
