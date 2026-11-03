@@ -88,6 +88,11 @@ digunakan PostgreSQL lokal pada mesin pengujian. Volume `postgres_data` menyimpa
 data saat container diganti. Perubahan password pada `.env` tidak otomatis
 mengubah password database yang sudah diinisialisasi di volume.
 
+API mengizinkan request browser hanya dari origin frontend lokal
+`http://127.0.0.1:5173` dan `http://localhost:5173`; origin lain tidak mendapat
+header CORS. Jika port Vite diubah, sesuaikan allowlist di
+`server/src/common/http/cors.ts`.
+
 Terminal API:
 
 ```sh

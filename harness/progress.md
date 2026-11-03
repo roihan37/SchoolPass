@@ -1,9 +1,62 @@
 # SchoolPass Progress Log
 
 ## Current phase
-03 - Leave Request Backend Workflow (IMPLEMENTED AND VERIFIED, 2026-11-03).
-Phase berikutnya belum dimulai. Tidak ada commit atau push.
-Catatan refactor dan Phase 00–02 di bawah merupakan riwayat.
+04 - React Frontend Vertical Slice + local API CORS (IMPLEMENTED; backend integration flow needs verification).
+Tidak ada commit atau push. Catatan Phase 00–03 di bawah merupakan riwayat.
+
+## Phase 04 — changes and decisions
+- Mengganti placeholder React dengan login dan dashboard berbasis role Parent/Teacher.
+  Parent dapat memilih anak, membuat pengajuan, melihat riwayat dan detail; Teacher
+  melihat daftar, memutus PENDING, dan wajib memberi catatan saat menolak.
+- API client terpusat dan bertipe untuk login, students/mine, leave list/create,
+  dan decision. Token disimpan hanya di state memori; setiap role/resource tetap
+  divalidasi server-side. 401 mengakhiri sesi; pesan backend/network/validasi
+  terlihat di UI. API base bisa dikonfigurasi lewat VITE_API_BASE_URL.
+- Komponen Button/Input/Select/StatusBadge/DataTable/Notice/SectionHeading dan
+  token warna/tipografi dibuat dekat aplikasi; loading/error/empty/success state,
+  label form, fokus keyboard, reduced motion, serta breakpoint responsif disediakan.
+- Respons leave list backend tidak menyertakan nama/kelas siswa. Teacher melihat
+  pengenal UUID singkat, bukan nama yang tidak dikirim API; tidak memperluas scope
+  backend. API backend menjadi sumber otorisasi.
+- Tidak menambah dependency. `client/package.json` belum memiliki test runner;
+  smoke UI dilakukan di Chrome. Login/dashboard terintegrasi penuh memerlukan API
+  dan seeded database yang aktif.
+
+## Phase 04 — actual verification
+Perintah dijalankan dari `client/`, Node/npm sesuai environment Phase 03.
+
+| Command/check | Result |
+|---|---|
+| `npm run lint` | PASS; oxlint tanpa error/warning |
+| `npm run build` | PASS; `tsc -b` dan Vite build (`19 modules transformed`) |
+| `git diff --check` | PASS |
+| Chrome smoke `http://127.0.0.1:5173/` | PASS; halaman login, heading, label email/password, tombol masuk muncul; console tanpa warning/error |
+| `curl -sS -o /dev/null -w 'HTTP %{http_code}\\n' http://127.0.0.1:3001/api/v1/health` | FAIL; HTTP 000, tidak dapat connect karena backend lokal tidak aktif |
+
+## Phase 04 — limitations
+- Tidak ada test runner React saat ini; tidak ditambahkan dependency baru sesuai
+  batas minimal scope. Core flow Parent → Teacher → Parent belum diuji
+  end-to-end; lint/build, render login, dan CORS sudah diverifikasi, tetapi bukan
+  bukti alur bisnis login sampai keputusan cuti secara penuh.
+- Perubahan backend hanya mengaktifkan CORS lokal; kontrak API/bisnis tidak
+  diubah. Nama siswa tidak tersedia pada response daftar leave untuk tampilan
+  Teacher, sehingga UI memakai ID singkat.
+
+## Phase 04 — local CORS integration fix
+- Setelah frontend melaporkan gagal koneksi, pemeriksaan menunjukkan health API
+  sempat 200 tetapi browser preflight `OPTIONS` menerima 404. Menambahkan
+  allowlist CORS untuk `http://127.0.0.1:5173` dan `http://localhost:5173`,
+  tanpa credentials; origin lokal lain tidak diberi header CORS.
+- `server/src/common/http/cors.ts` dipakai oleh bootstrap API dan e2e supaya
+  aturan yang dites sama dengan konfigurasi production entry point.
+- Verifikasi: `npm run lint` PASS (37 file); `npm test` PASS (13 tes/4 file);
+  `npm run test:e2e` PASS (6 tes); `npm run build` PASS. Percobaan awal e2e di sandbox gagal `listen EPERM`;
+  pengulangan dengan izin localhost PASS.
+- Smoke check terhadap API `PORT=3001`: preflight dari Vite `204` dengan
+  `Access-Control-Allow-Origin`, methods dan headers yang diperlukan; health
+  `200`; `http://example.test` tidak mendapat `Access-Control-Allow-Origin`.
+- Server development sedang berjalan pada `127.0.0.1:3001`; hentikan dengan
+  Ctrl+C pada terminal prosesnya.
 
 ## Phase 03 — changes and decisions
 - Baseline awal HEAD `71c4f83` bersih tetapi typecheck gagal TS2307 pada
@@ -444,3 +497,62 @@ ke container, healthcheck memeriksa kesiapan PostgreSQL. Health API terpisah dar
 readiness DB. Detail arsitektur tersedia di README.
 
 Next: tunggu review manusia dan persetujuan eksplisit sebelum Phase 01.
+
+## Frontend Tailwind + shadcn UI refactor
+- Status: implementasi frontend selesai; tidak ada commit.
+- Struktur `client/src` dipisah menjadi `features/auth`, `features/dashboard`,
+  `features/leave`, `features/shared`, `components/ui`, `lib`, dan `styles`.
+  `App.tsx` kini menjadi komposisi sesi/login/dashboard; API client pindah ke
+  `lib/api.ts`, komponen bersama ke `components/primitives.tsx`.
+- Tailwind CSS v4 dipasang dengan plugin resmi Vite `@tailwindcss/vite`.
+  `components.json`, alias `@/`, helper `cn` dan komponen Button berbasis
+  `class-variance-authority` menyiapkan pola komponen shadcn yang dapat disalin
+  dan dimodifikasi di dalam repo. Alur login, parent, dan teacher tetap memakai
+  komponen fiturnya yang sudah ada.
+- Tidak ada model/data atau fitur produk baru; tidak memasang fitur Tailwind
+  tambahan selain animasi shadcn. Prisma/Auth backend/integrasi lain tidak disentuh.
+- Pemeriksaan:
+  - client `npm run lint`: PASS, tanpa warning.
+  - client `npm run build`: PASS, `tsc -b` dan Vite build (29 modul).
+  - `curl -i --max-time 3 http://127.0.0.1:3001/api/v1/health`: PASS, HTTP 200,
+    `{"status":"ok"}`.
+  - Chrome smoke `http://localhost:5173/`: PASS; login heading, email/password
+    fields, and submit button rendered in accessibility tree. Vite was already
+    running on this port, so a second dev-server start correctly reported EADDRINUSE.
+  - `git diff --check`: PASS.
+  - Client belum memiliki test runner/unit test; tidak ada test frontend terpisah
+    yang dapat dijalankan. Build mencakup typecheck.
+  - client `npm audit --omit=dev`: PASS, 0 runtime vulnerabilities. Full install
+    audit: 6 temuan (2 low, 4 moderate), termasuk tooling dev; tidak menjalankan
+    audit fix otomatis.
+- Hambatan setup: perintah `shadcn init` tidak dapat mengakses `ui.shadcn.com`
+  (DNS `ENOTFOUND`), sehingga konfigurasi standar dan Button disiapkan manual;
+  CLI shadcn disimpan sebagai devDependency untuk penambahan komponen berikutnya.
+
+## Frontend UI polish — 2026-11-04
+- Memperbaiki keterbacaan login/dashboard lewat hierarki ukuran teks yang lebih
+  jelas, ukuran target interaksi yang lebih nyaman, jarak/kartu yang konsisten,
+  serta kontras placeholder yang lebih terbaca.
+- Menambahkan indikator fokus keyboard yang konsisten untuk kontrol interaktif.
+  Menyempurnakan breakpoint ponsel/tablet untuk ringkasan, form, tabel, panel
+  detail, dan login tanpa mengubah alur atau kontrak API.
+- Verifikasi aktual di `client/`: `npm run lint` PASS; `npm run build` PASS
+  (TypeScript dan Vite, 29 modul); `git diff --check` PASS. Chrome smoke PASS:
+  halaman login termuat dan heading, label email/kata sandi, tombol masuk, serta
+  catatan akun demo muncul pada accessibility tree.
+- Tidak ada test runner frontend yang tersedia; tidak menambah dependency.
+  Smoke browser hanya menguji halaman login; alur Parent/Teacher memerlukan akun
+  demo dan API/database hidup dan tidak diklaim telah diuji dalam perubahan ini.
+
+## Frontend visual redesign follow-up — 2026-11-04
+- Menegaskan hierarki visual login dengan latar hijau bergradasi, ornamen
+  lingkaran, panel form putih, dan bantuan yang lebih terbaca.
+- Memperjelas dashboard melalui area heading berwarna, tiga kartu ringkasan
+  dengan aksen status, dan permukaan daftar/form yang lebih terdefinisi.
+- Menghilangkan ruang kanan kosong pada desktop ketika belum ada permintaan
+  terpilih; panel detail tetap mendapat ruang saat permintaan dipilih.
+- Verifikasi aktual di `client/`: `npm run lint` PASS; `npm run build` PASS
+  (`tsc -b` dan Vite, 29 modul). Chrome smoke `http://localhost:5173/` PASS:
+  login termuat dan screenshot memperlihatkan panel dan palet baru. Tidak ada
+  test runner frontend terpisah. Dashboard berautentikasi belum diverifikasi
+  pada iterasi ini.

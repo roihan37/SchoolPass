@@ -1,11 +1,10 @@
-import './App.css'
+import { useCallback, useState } from 'react'
+import { Login } from './features/auth/Login'
+import { Dashboard } from './features/dashboard/Dashboard'
+import type { Session } from './features/shared/types'
 
 export default function App() {
-  return (
-    <main>
-      <h1>SchoolPass</h1>
-      <p>Fondasi aplikasi izin siswa.</p>
-      <p>Phase 00: React, NestJS, dan PostgreSQL.</p>
-    </main>
-  )
+  const [session, setSession] = useState<Session | null>(null)
+  const logout = useCallback(() => setSession(null), [])
+  return session ? <Dashboard session={session} onLogout={logout} /> : <Login onLogin={setSession} />
 }

@@ -4,6 +4,7 @@ import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/infrastructure/database/prisma.service.js';
+import { configureCors } from '../src/common/http/cors.js';
 import { randomBytes } from 'node:crypto';
 
 describe('API composition (e2e)', () => {
@@ -20,6 +21,7 @@ describe('API composition (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api/v1');
+    configureCors(app);
     await app.init();
   });
 
@@ -28,6 +30,36 @@ describe('API composition (e2e)', () => {
       .get('/api/v1/health')
       .expect(200)
       .expect({ status: 'ok' });
+  });
+
+  it('allows the local Vite origin and handles API preflight requests', async () => {
+    const origin = 'http://127.0.0.1:5173';
+
+    await request(app.getHttpServer())
+      .get('/api/v1/health')
+      .set('Origin', origin)
+      .expect('Access-Control-Allow-Origin', origin)
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .options('/api/v1/leave-requests')
+      .set('Origin', origin)
+      .set('Access-Control-Request-Method', 'POST')
+      .set('Access-Control-Request-Headers', 'authorization,content-type')
+      .expect('Access-Control-Allow-Origin', origin)
+      .expect('Access-Control-Allow-Methods', /POST/)
+      .expect('Access-Control-Allow-Headers', /authorization/i)
+      .expect(204);
+  });
+
+  it('does not grant CORS access to an unconfigured origin', () => {
+    return request(app.getHttpServer())
+      .get('/api/v1/health')
+      .set('Origin', 'http://example.test')
+      .expect((response) => {
+        expect(response.headers['access-control-allow-origin']).toBeUndefined();
+      })
+      .expect(200);
   });
 
   it('rejects an unknown route', () =>
