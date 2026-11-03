@@ -1,10 +1,99 @@
 # SchoolPass Progress Log
 
 ## Current phase
-01 - Database Foundation (IMPLEMENTED AND VERIFIED, 2026-11-03)
+02 - Authentication and Authorization (IMPLEMENTED AND VERIFIED, 2026-11-03)
 
-Implementasi Phase 01 mendapat persetujuan pengguna melalui jawaban "ya" atas
-rencana. Tidak ada Git commit. Phase berikutnya belum dimulai.
+Implementasi Phase 02 mendapat persetujuan eksplisit pengguna. Repository bersih
+sebelum perubahan. Scope mengikuti `harness/tasks/02-auth.md`; tidak ditemukan
+file rencana terpisah di repository. Tidak ada Git commit/push. Phase 03 belum dimulai.
+
+## Phase 02 — changes and decisions
+- `src/auth/`: module/service/controller, DTO login, global AuthGuard, decorator
+  Public/Roles/CurrentUser, dan utility hash password. Login Parent/Teacher 200,
+  salah password/email tak ditemukan 401 dengan pesan sama; me hanya identitas aman.
+- Pin `@nestjs/jwt@12.0.3` (peer mendukung Nest 12), `class-validator@0.15.1`,
+  `class-transformer@0.5.1`; tidak memasang Passport/layanan baru. Node 24.18.1,
+  Nest 12.3.2, Prisma 7.10.1 dan ESM `.js` dipertahankan. Mengikuti
+  [Nest JWT](https://github.com/nestjs/jwt),
+  [Nest validation](https://docs.nestjs.com/techniques/validation), dan
+  [Node 24 crypto](https://nodejs.org/docs/latest-v24.x/api/crypto.html).
+- JWT HS256 berumur 900 detik; verifikasi membatasi algoritma, issuer/audience,
+  UUID subject dan expiry wajib. Secret dari environment, minimum 32 byte,
+  tanpa fallback; startup gagal jika kosong/pendek. `.env.example` hanya placeholder.
+  `.env` lokal tidak diubah; smoke test memakai secret acak sementara melalui env.
+- Guard melindungi seluruh route terdaftar secara default; health/login ditandai
+  Public. Token hilang/rusak/kedaluwarsa/user tidak ada => 401; role salah => 403.
+  User dan role dibaca dari database per request agar perubahan role tidak perlu
+  menunggu token habis. Query database tambahan diterima untuk konsistensi demo.
+- DTO email/password membatasi bentuk/panjang, menolak field tambahan. Email
+  dicocokkan persis agar tidak mengubah kontrak unique database. `expectedType`
+  eksplisit dan `@Inject` membuat validation/DI bekerja juga pada transform Vitest
+  yang tidak menghasilkan metadata decorator TypeScript lengkap.
+- Hash scrypt asynchronous, salt acak, timingSafeEqual; format Phase 01 dipakai
+  kembali tanpa mereset password lama. Unknown account tetap melakukan scrypt
+  memakai dummy hash acak untuk mengurangi perbedaan jalur verifikasi. Utility
+  yang sama dipakai seed agar format penyimpanan dan verifikasi tidak berbeda.
+- `src/students/`: GET `/api/v1/students/mine`, Parent saja. Service memeriksa
+  role dan memfilter `parentId` dari user terverifikasi, bukan input query. Select
+  hanya id/nama/classId/info kelas; tanpa akun parent lain atau password hash.
+- Reuse PrismaModule/PrismaService; controller tetap tipis, service mengatur
+  query/aturan akses. Tidak ada perubahan schema/migrasi, UI React, leave request,
+  registrasi publik, MinIO, Redis atau BullMQ.
+- `test/auth.db-spec.ts`: fixture fiktif UUID acak pada database `_test`, HTTP
+  nyata dan Prisma/PostgreSQL; cleanup hanya fixture test sendiri. Memeriksa
+  kedua role, validasi DTO, signature/expiry/issuer/audience/algoritma/subject,
+  token tanpa expiry, user tidak ada, role terbaru dan isolasi dua Parent.
+  Tes fondasi Phase 01 tetap dijalankan. Tidak menulis database produksi.
+- README, docs/API.md, server/AGENTS.md dan .env.example diperbarui untuk setup,
+  kontrak/status HTTP, scope aktif dan keterbatasan; tidak menyimpan secret/token.
+
+## Phase 02 — actual verification
+Perintah npm server dari `server/`, client dari `client/`; Node 24.18.1/npm 11.16.0.
+
+| Command | Result |
+|---|---|
+| `npm install --save-exact @nestjs/jwt@12.0.3 class-validator@0.15.1 class-transformer@0.5.1` | PASS; tiga dependency langsung dipin dan lockfile diperbarui |
+| `npm run format` | PASS; source/test/tool Prisma |
+| `npm run lint` | PASS; 27 files, 0 errors/warnings |
+| `npx tsc --noEmit` | PASS |
+| `npm test` | PASS; 13 tests, 3 files |
+| `npm run test:e2e` | PASS akhir; 4 tests, 1 file |
+| `npm run test:db` | PASS akhir; 30 tests, 2 files (14 fondasi + 16 autentikasi/otorisasi), tanpa migrasi pending |
+| `npm run build` | PASS; Prisma generate dan Nest build |
+| `npx prettier --check --ignore-path ../.gitignore "src/**/*.ts" "test/**/*.ts" "prisma/**/*.ts" prisma.config.ts 'vitest.config*.ts'` | PASS |
+| client: `npm run lint`, `npm run build` | PASS; frontend tetap tidak diubah |
+| `docker compose ps` | PASS akhir; PostgreSQL healthy, 127.0.0.1:55432 |
+| `node --input-type=module` smoke script: spawn `node dist/main.js`, PORT=3011, JWT_SECRET acak sementara | PASS; health/login Parent/Teacher/me/anak 200, tanpa token/password salah 401, Teacher pada students 403; proses dihentikan sesudah tes |
+| `npm audit --omit=dev` | PASS; 0 vulnerabilities runtime |
+| `npm audit` | FAIL exit 1; 2 moderate @nestjs/cli/minimatch, temuan dev lama |
+| `git diff --check`, `git status --short`, `git check-ignore` | PASS; scope Phase 02, env/generated/build/tools tetap ignored |
+
+## Phase 02 — failures and limitations
+- Percobaan awal HTTP test dan database di sandbox gagal `listen EPERM: operation
+  not permitted 127.0.0.1` / `connect EPERM 127.0.0.1:55432`. Docker socket juga
+  ditolak sandbox. Diulang dengan izin akses lokal: semua test/health di atas lulus.
+- Percobaan audit dalam sandbox gagal `ENOTFOUND registry.npmjs.org`; retry dengan
+  izin jaringan berhasil. Audit penuh tetap gagal karena
+  [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249) pada dev
+  dependency lama. Tidak melakukan downgrade major CLI atau `audit fix --force`.
+- npm memperingatkan install scripts fsevents/prisma/@prisma/engines belum
+  diizinkan; generate/build/test berhasil tanpa memberi izin tambahan.
+- Root `.env` perlu diisi JWT_SECRET untuk menjalankan server sendiri. Password
+  seed lama tetap berlaku; mengganti SEED_PASSWORD tidak mereset akun yang ada.
+  Tidak menjalankan reset/migrasi development atau mengubah data production.
+- Tidak ada refresh token, logout/revocation list atau rate limiting login.
+  Token berakhir setelah 15 menit; rotasi secret membatalkan semua token lama.
+  Belum siap produksi; fitur di luar scope memerlukan keputusan terpisah.
+- Seluruh acceptance Phase 02 terpenuhi. Diff dan file baru ditinjau untuk scope,
+  keamanan, file tak terkait dan secret; `git diff --check` lulus.
+  Next: review manusia sebelum `harness/tasks/03-leave-backend.md`.
+
+---
+
+## Historical record — Phase 01 (2026-11-03)
+Bagian berikut mencatat kondisi pada akhir Phase 01 sebelum implementasi auth.
+Pernyataan auth belum tersedia hanya berlaku pada waktu itu. Implementasi Phase 01
+disetujui melalui jawaban "ya" atas rencana.
 
 ## Phase 01 — changes and decisions
 - `server/package.json`, lockfile: pin Prisma CLI/client/adapter-pg 7.10.1 dan

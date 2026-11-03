@@ -1,5 +1,6 @@
 # SchoolPass server
 
-Ikuti AGENTS.md di root. Scope aktif Phase 01: empat model inti, migrasi,
-seed fiktif, provider Prisma, dan verifikasi database. Endpoint siswa menunggu
-autentikasi; jangan menambahkan autentikasi atau layanan P1 pada fase ini.
+Ikuti AGENTS.md di root. Scope aktif Phase 02: login JWT, password hashing seed,
+current-user, guard autentikasi/role, dan daftar anak milik Parent.
+Pertahankan fondasi Prisma Phase 01. Jangan mulai leave requests, fitur React,
+registrasi publik, MinIO, Redis, atau BullMQ pada fase ini.

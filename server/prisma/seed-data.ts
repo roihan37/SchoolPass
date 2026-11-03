@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync } from 'node:crypto';
+import { hashPassword } from '../src/auth/password.js';
 import type { PrismaClient } from '../src/generated/prisma/client.js';
 
 export const seedIds = {
@@ -37,8 +37,7 @@ export async function seedDatabase(prisma: PrismaClient, password: string) {
       },
     ];
     for (const user of users) {
-      const salt = randomBytes(16).toString('hex');
-      const hash = `scrypt$${salt}$${scryptSync(password, salt, 64).toString('hex')}`;
+      const hash = await hashPassword(password);
       // Re-running seed preserves existing password hashes; this is not a password reset.
       await tx.user.upsert({
         where: { id: user.id },

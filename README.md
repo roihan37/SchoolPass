@@ -1,8 +1,9 @@
 # SchoolPass
 
-Fondasi Phase 00–01: React + TypeScript + Vite di `client/`, NestJS + TypeScript di
+Fondasi Phase 00–02: React + TypeScript + Vite di `client/`, NestJS + TypeScript di
 `server/`, dan PostgreSQL sebagai satu-satunya service Docker Compose. Phase 01
 menambahkan empat model Prisma, migrasi, seed fiktif, dan provider database Nest.
+Phase 02 menambahkan login JWT serta akses anak sesuai role dan kepemilikan.
 
 ## Runtime dan versi teruji (3 November 2026)
 
@@ -34,8 +35,9 @@ mengikuti lockfile, gunakan perintah berikut (juga telah diuji):
 
 Siapkan `.env` lokal. `.env.example` menunjukkan variabel yang diperlukan dan
 sengaja tidak menyimpan password. Perintah berikut membuat password acak lokal,
-tidak menampilkannya. `.env` yang sudah ada dipertahankan; hanya `SEED_PASSWORD`
-yang ditambahkan bila belum ada. Memerlukan Python 3.
+tidak menampilkannya. `.env` yang sudah ada dipertahankan; `SEED_PASSWORD` dan
+`JWT_SECRET` ditambahkan bila variabelnya belum ada. Nilai kosong yang sudah ada
+perlu diisi manual. Memerlukan Python 3.
 
 ```sh
 python3 - <<'PYENV'
@@ -46,7 +48,10 @@ if not p.exists():
     p.write_text('POSTGRES_DB=schoolpass\nPOSTGRES_USER=schoolpass\nPOSTGRES_PASSWORD=' + secrets.token_hex(24) + '\n')
 text = p.read_text()
 if not any(line.startswith('SEED_PASSWORD=') for line in text.splitlines()):
-    p.write_text(text.rstrip() + '\nSEED_PASSWORD=' + secrets.token_hex(24) + '\n')
+    text = text.rstrip() + '\nSEED_PASSWORD=' + secrets.token_hex(24) + '\n'
+if not any(line.startswith('JWT_SECRET=') for line in text.splitlines()):
+    text = text.rstrip() + '\nJWT_SECRET=' + secrets.token_hex(32) + '\n'
+p.write_text(text)
 p.chmod(0o600)
 PYENV
 ```
@@ -204,15 +209,95 @@ hasil. Parameter dibind, tanpa merangkai input ke SQL. Ini verifikasi query;
 otorisasi tetap perlu autentikasi dan pemeriksaan kepemilikan pada fase berikutnya.
 FK sendiri tidak menjamin role orang tua/guru atau identitas pengaju.
 
-GET `/api/v1/students/mine` ditunda sampai autentikasi tersedia sesuai opsi tugas
-Phase 01. Belum ada endpoint data siswa, JWT, fitur React baru, MinIO, Redis, BullMQ.
+Phase 02 menambahkan JWT dan GET `/api/v1/students/mine` dengan filter kepemilikan
+berdasarkan identitas terverifikasi. React, MinIO, Redis, dan BullMQ belum ditambahkan.
+
+## Autentikasi lokal — Phase 02
+
+Isi `JWT_SECRET` di `.env` root dengan nilai acak minimal 32 byte. Buat nilainya
+sekali dengan perintah berikut, lalu salin hasilnya ke `.env` lokal yang diabaikan Git:
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+Server menolak startup jika secret kosong/terlalu pendek. Jangan menyalin secret
+atau token ke issue, screenshot, maupun file tracked. Rotasi secret membatalkan token
+yang ditandatangani secret lama.
+
+```bash
+# Dari root, gunakan Node sesuai .nvmrc
+nvm use
+docker compose up -d postgres
+cd server
+npm ci
+npm run prisma:deploy
+npm run prisma:seed
+PORT=3001 npm run start:dev
+```
+
+Seed memakai email `parent.a@example.test`, `parent.b@example.test`, dan
+`teacher@example.test`. Password adalah nilai `SEED_PASSWORD` pada seed pertama;
+seed ulang mempertahankan hash lama, sehingga mengganti `.env` tidak mereset password.
+Tidak ada registrasi publik. Login mengembalikan `accessToken`, `tokenType: Bearer`,
+`expiresIn: 900` detik dan `user` tanpa hash. Login memakai email persis seperti seed.
+
+Untuk memeriksa login dan akses anak tanpa memasukkan password/token ke command history,
+jalankan di terminal lain dari `server/`:
+
+```bash
+node --input-type=module <<'JS'
+import { strict as assert } from 'node:assert';
+process.loadEnvFile('../.env');
+const base = 'http://127.0.0.1:3001/api/v1';
+const login = await fetch(`${base}/auth/login`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ email: 'parent.a@example.test', password: process.env.SEED_PASSWORD }),
+});
+assert.equal(login.status, 200);
+const { accessToken } = await login.json();
+for (const path of ['/auth/me', '/students/mine']) {
+  const response = await fetch(`${base}${path}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  console.log(path, response.status, await response.json());
+}
+JS
+```
+
+Token berlaku 15 menit (HS256, issuer `schoolpass`, audience `schoolpass-api`).
+`/health` dan `/auth/login` publik; `/auth/me` memerlukan JWT; `/students/mine`
+khusus Parent. Tanpa token/token tidak valid menghasilkan 401; Teacher yang
+mengakses anak menghasilkan 403; kredensial berbentuk salah/field tambahan menghasilkan
+400. Parameter `parentId` dari klien tidak digunakan untuk memilih pemilik data.
+Role dibaca dari database setiap request. Password scrypt memakai salt acak dan
+perbandingan hash dengan `timingSafeEqual`, kompatibel dengan seed Phase 01.
+
+Verifikasi dari `server/`:
+
+```bash
+npm run lint
+npx tsc --noEmit
+npm test
+npm run test:e2e
+npm run test:db
+npm run build
+npx prettier --check --ignore-path ../.gitignore 'src/**/*.ts' 'test/**/*.ts' 'prisma/**/*.ts' prisma.config.ts 'vitest.config*.ts'
+```
+
+Tes DB memakai database terpisah berakhiran `_test`, akun fiktif sementara, dan
+secret acak per test run. Tes mencakup login kedua role, validasi DTO, token
+rusak/kedaluwarsa, pembatasan role, dan pemisahan anak antar-parent.
+Belum ada refresh token, logout/revocation list, atau pembatasan percobaan login;
+fitur ini perlu dirancang sebelum penggunaan di luar demo lokal.
 
 ## Hasil dan batasan
 
-Phase 01: lint/build server lulus; 5 unit test, 4 tes HTTP, dan 14 tes PostgreSQL
-lulus. Schema valid, migrasi diterapkan, seed berulang tidak menggandakan data,
-dan health hasil build HTTP 200. Client tidak berubah; hasil lint/build Phase 00
-tetap menjadi hasil historis. Detail perintah dan kegagalan awal
+Phase 02: format, lint, type check, build server lulus; 13 unit test, 4 tes HTTP,
+dan 30 tes PostgreSQL/HTTP lulus. Login akun seed lama dan health hasil build HTTP
+200 terverifikasi; kasus 401/403 juga lulus. Client tidak berubah; lint/build
+client diulang dan lulus. Tidak ada perubahan schema/migrasi. Detail perintah dan kegagalan awal
 tersimpan di [harness/progress.md](harness/progress.md).
 
 Audit runtime server dan audit client: 0 temuan. Audit penuh server masih keluar
@@ -225,4 +310,4 @@ diizinkan. Generate/migrate/seed/build/test tetap berhasil pada lingkungan ini;
 unduhan engine pertama memerlukan akses jaringan.
 
 Panduan proyek: [AGENTS.md](AGENTS.md), [arsitektur](docs/ARCHITECTURE.md), dan
-[tugas Phase 01](harness/tasks/01-database.md). Phase berikutnya menunggu persetujuan.
+[tugas Phase 02](harness/tasks/02-auth.md). Phase berikutnya menunggu persetujuan.
