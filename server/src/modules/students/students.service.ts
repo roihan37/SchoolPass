@@ -1,6 +1,6 @@
 import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service.js';
-import type { CurrentIdentity } from '../auth/auth.decorators.js';
+import { PrismaService } from '../../infrastructure/database/prisma.service.js';
+import type { CurrentIdentity } from '../../common/auth/auth.identity.js';
 
 @Injectable()
 export class StudentsService {

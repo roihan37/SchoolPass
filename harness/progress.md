@@ -3,6 +3,66 @@
 ## Current phase
 02 - Authentication and Authorization (IMPLEMENTED AND VERIFIED, 2026-11-03)
 
+Refactor struktur backend setelah Phase 02: IMPLEMENTED AND VERIFIED, 2026-11-03.
+Phase 03 belum dimulai. Catatan Phase 02 dan fase sebelumnya di bawah merupakan
+riwayat; path source terkini mengikuti bagian refactor berikut.
+
+## Backend structure refactor — changes and decisions
+- Rencana struktur mendapat persetujuan eksplisit pengguna; working tree bersih
+  sebelum perubahan. Tidak ada commit/push, dependency baru, atau upgrade versi.
+- Fitur auth, students, dan health berada di `server/src/modules/`; health
+  dipisahkan dari AppController/AppService menjadi HealthModule. AppModule hanya
+  merangkai ketiga module. Controller tetap tipis dan aturan akses tetap di service.
+- PrismaModule/PrismaService serta helper environment pindah ke
+  `src/infrastructure/database/`. Module fitur mengimpor PrismaModule secara
+  eksplisit; lifecycle koneksi dan output generated client tidak berubah.
+- Guard/decorator/tipe identitas/projection aman berada di `src/common/auth/`.
+  Registrasi APP_GUARD dan konfigurasi JWT tetap dalam AuthModule supaya scope DI
+  jelas. Guard tidak mengimpor AuthService; projection identitas bersama tetap
+  mengecualikan passwordHash. Hash password dipindah ke `common/security/` agar
+  seed tidak bergantung pada module fitur.
+- DTO login dekat fitur auth; unit test dipindah dekat komponen masing-masing.
+  Tiga kasus konfigurasi secret dipisahkan dari test password ke auth.config.spec.ts.
+  Tes lintas module tetap di `server/test/`; jumlah assertion/test tidak berkurang.
+- Import Node ESM `.js`, Prisma CLI config, seed, preparation test, dan konfigurasi
+  compiler tooling disesuaikan. Schema/migrasi, kontrak API, serta frontend tidak
+  berubah. Tidak membuat folder kosong, Redis, MinIO, BullMQ atau proses worker.
+- README dan docs/ARCHITECTURE.md mendokumentasikan struktur serta rencana worker
+  terpisah pada fase queue; belum ada implementasi worker maupun fitur fase lain.
+
+## Backend structure refactor — actual verification
+Perintah npm dijalankan dari `server/`, Node 24.18.1/npm 11.16.0.
+
+| Command | Result |
+|---|---|
+| `npm run format` | PASS |
+| `npm run lint` | PASS; 30 files, 0 errors/warnings |
+| `npx tsc --noEmit` | PASS |
+| `npx tsc --noEmit -p tsconfig.tools.json` | PASS |
+| `npm test` | PASS; 13 tests, 4 files |
+| `npm run test:e2e` | PASS akhir; 4 tests, 1 file |
+| `npm run test:db` | PASS akhir; 30 tests, 2 files; migrasi database `_test` tidak memiliki pending migration |
+| `npm run build` | PASS; Prisma generate 7.10.1 dan Nest build |
+| `npx prettier --check --ignore-path ../.gitignore 'src/**/*.ts' 'test/**/*.ts' 'prisma/**/*.ts' prisma.config.ts 'vitest.config*.ts'` | PASS |
+| `docker compose ps` dari root | PASS akhir; PostgreSQL healthy pada 127.0.0.1:55432 |
+| Smoke script Node: `node dist/main.js`, port 3013, database `_test`, secret acak sementara | PASS; health/login Parent dan Teacher/me/anak 200; password salah dan tanpa token 401; Teacher mengakses students 403; passwordHash tidak dikembalikan; fixture dibersihkan dan proses dihentikan |
+| `git diff --check`, review import dan seluruh file baru/perubahan | PASS; tidak ada perubahan schema, dependency, secrets, atau file di luar scope |
+
+## Backend structure refactor — failures and limitations
+- Percobaan awal perintah npm dari root gagal `ENOENT` karena tidak ada package.json
+  root; proses dihentikan dan diulang dari `server/`, tanpa instalasi dependency.
+- Sandbox menolak HTTP `listen EPERM`, koneksi database `connect EPERM
+  127.0.0.1:55432`, dan Docker socket. Tes HTTP/database, Docker check serta smoke
+  test diulang dengan izin akses lokal di luar sandbox dan berhasil.
+- Tes database menggunakan database `_test` dan fixture fiktif; database produksi
+  tidak disentuh. Client tidak berubah, sehingga pemeriksaan client tidak diulang.
+- Audit dependency tidak diulang karena dependency/lockfile tidak berubah; temuan
+  audit dev sebelumnya tetap tercatat pada riwayat Phase 02.
+- Refactor yang disetujui selesai. Worker dan integrasi layanan lain memerlukan
+  fase tersendiri; tidak memulai tugas berikutnya secara otomatis.
+
+## Historical record — Phase 02 (2026-11-03)
+
 Implementasi Phase 02 mendapat persetujuan eksplisit pengguna. Repository bersih
 sebelum perubahan. Scope mengikuti `harness/tasks/02-auth.md`; tidak ditemukan
 file rencana terpisah di repository. Tidak ada Git commit/push. Phase 03 belum dimulai.

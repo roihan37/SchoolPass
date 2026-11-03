@@ -4,9 +4,9 @@ import type { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
-import { PrismaService } from '../src/prisma/prisma.service.js';
-import { testDatabaseUrl } from '../src/config/database-env.js';
-import { hashPassword } from '../src/auth/password.js';
+import { PrismaService } from '../src/infrastructure/database/prisma.service.js';
+import { testDatabaseUrl } from '../src/infrastructure/database/database-env.js';
+import { hashPassword } from '../src/common/security/password.js';
 
 describe('authentication and ownership (real PostgreSQL + HTTP)', () => {
   let app: INestApplication;

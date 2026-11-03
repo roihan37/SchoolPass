@@ -1,4 +1,4 @@
-import { testDatabaseUrl } from '../src/config/database-env.js';
+import { testDatabaseUrl } from './database-env.js';
 
 describe('test database isolation', () => {
   beforeEach(() => {

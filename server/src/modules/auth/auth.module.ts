@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
-import { PrismaModule } from '../prisma/prisma.module.js';
+import { PrismaModule } from '../../infrastructure/database/prisma.module.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
-import { AuthGuard } from './auth.guard.js';
+import { AuthGuard } from '../../common/auth/auth.guard.js';
 
 export function jwtSecret(): string {
   const secret = process.env.JWT_SECRET;

@@ -1,6 +1,5 @@
 import { randomBytes, scryptSync } from 'node:crypto';
 import { hashPassword, verifyPassword } from './password.js';
-import { jwtSecret } from './auth.module.js';
 
 describe('password security', () => {
   it('salts hashes and verifies correct passwords only', async () => {
@@ -21,17 +20,6 @@ describe('password security', () => {
     'rejects malformed hash %j',
     async (hash) => {
       expect(await verifyPassword('anything', hash)).toBe(false);
-    },
-  );
-  it.each(['', 'short', ' '.repeat(40)])(
-    'rejects missing or insufficient JWT secret',
-    (secret) => {
-      vi.stubEnv('JWT_SECRET', secret);
-      try {
-        expect(() => jwtSecret()).toThrow('JWT_SECRET');
-      } finally {
-        vi.unstubAllEnvs();
-      }
     },
   );
 });

@@ -1,16 +1,13 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'node:crypto';
-import { PrismaService } from '../prisma/prisma.service.js';
-import { hashPassword, verifyPassword } from './password.js';
-import type { LoginDto } from './login.dto.js';
-
-export const identitySelect = {
-  id: true,
-  name: true,
-  email: true,
-  role: true,
-} as const;
+import { PrismaService } from '../../infrastructure/database/prisma.service.js';
+import { identitySelect } from '../../common/auth/auth.identity.js';
+import {
+  hashPassword,
+  verifyPassword,
+} from '../../common/security/password.js';
+import type { LoginDto } from './dto/login.dto.js';
 
 @Injectable()
 export class AuthService {

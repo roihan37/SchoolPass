@@ -1,8 +1,8 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { PrismaModule } from '../src/prisma/prisma.module.js';
-import { PrismaService } from '../src/prisma/prisma.service.js';
-import { testDatabaseUrl } from '../src/config/database-env.js';
+import { PrismaModule } from '../src/infrastructure/database/prisma.module.js';
+import { PrismaService } from '../src/infrastructure/database/prisma.service.js';
+import { testDatabaseUrl } from '../src/infrastructure/database/database-env.js';
 import { seedDatabase, seedIds } from '../prisma/seed-data.js';
 
 describe('PostgreSQL foundation (real database)', () => {

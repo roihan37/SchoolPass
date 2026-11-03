@@ -1,4 +1,4 @@
-import { hashPassword } from '../src/auth/password.js';
+import { hashPassword } from '../src/common/security/password.js';
 import type { PrismaClient } from '../src/generated/prisma/client.js';
 
 export const seedIds = {

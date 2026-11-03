@@ -9,10 +9,10 @@ import {
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { isUUID } from 'class-validator';
-import type { Role } from '../generated/prisma/client.js';
-import { PrismaService } from '../prisma/prisma.service.js';
-import type { AuthenticatedRequest } from './auth.decorators.js';
-import { identitySelect } from './auth.service.js';
+import type { Role } from '../../generated/prisma/client.js';
+import { PrismaService } from '../../infrastructure/database/prisma.service.js';
+import type { AuthenticatedRequest } from './auth.identity.js';
+import { identitySelect } from './auth.identity.js';
 
 @Injectable()
 export class AuthGuard implements CanActivate {

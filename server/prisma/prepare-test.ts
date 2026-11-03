@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import pg from 'pg';
-import { testDatabaseUrl } from '../src/config/database-env.js';
+import { testDatabaseUrl } from '../src/infrastructure/database/database-env.js';
 
 const testUrl = new URL(testDatabaseUrl());
 const name = decodeURIComponent(testUrl.pathname.slice(1));

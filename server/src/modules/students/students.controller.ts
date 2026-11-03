@@ -1,9 +1,6 @@
+import type { CurrentIdentity } from '../../common/auth/auth.identity.js';
 import { Controller, Get, Inject } from '@nestjs/common';
-import {
-  CurrentUser,
-  Roles,
-  type CurrentIdentity,
-} from '../auth/auth.decorators.js';
+import { CurrentUser, Roles } from '../../common/auth/auth.decorators.js';
 import { StudentsService } from './students.service.js';
 
 @Controller('students')

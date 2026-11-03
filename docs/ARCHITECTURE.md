@@ -17,6 +17,36 @@ NestJS also calls MinIO object storage and Redis; BullMQ worker process consumes
 ## Backend boundaries
 Thin controllers, services own business logic, centralized Prisma access, DTO validation, guards plus record-level authorization in services. No external production credentials.
 
+### Backend layout (implemented through Phase 02)
+- `server/src/modules/`: feature modules `auth`, `students`, and operational `health`.
+  Controllers handle HTTP; services own business rules and record-level authorization.
+  Login DTO lives in `auth/dto/`; unit tests live beside their tested components.
+- `server/src/infrastructure/database/`: PrismaModule, PrismaService, and database
+  environment loading. Feature modules explicitly import PrismaModule, which exports
+  PrismaService and owns connection/disconnection lifecycle through Nest DI.
+- `server/src/common/auth/`: shared guard, decorators, identity/request types, and
+  safe identity projection (without passwordHash). Common components do not import
+  feature services. AuthModule still owns APP_GUARD registration and JWT configuration;
+  moving a provider file does not change its Nest module scope.
+- `server/src/common/security/`: password hashing/verification shared by login and seed.
+- `server/src/generated/prisma/`: ignored generated client; generator output and ESM
+  `.js` imports remain unchanged. Do not edit generated files.
+- `server/prisma/`: schema, migration history, fictional seed, and test preparation.
+  `server/test/` holds cross-module HTTP/database tests; database-env unit tests live
+  beside the infrastructure helper.
+- `server/src/app.module.ts` composes feature modules; `main.ts` bootstraps the API.
+  No generic repository/base-service layer or catch-all CommonModule is required.
+
+### API and worker processes (future queue phase)
+The API remains the only implemented application process. When the queue phase is
+approved, add a separate worker entry point/module using a Nest application context
+without an HTTP listener. It imports only required providers, rather than AppModule
+and its HTTP controllers/guards. Both processes share one codebase and PostgreSQL;
+the API enqueues BullMQ jobs and the worker consumes them through Redis.
+Redis, MinIO, and BullMQ connection integrations will live under infrastructure;
+business job handling belongs with the relevant feature. No empty integration or
+worker directories are created before the corresponding implementation phase.
+
 ## Frontend boundaries
 React + Vite + TypeScript; use a small consistent design system (Button, TextInput, Select, StatusBadge, DataTable, Dialog) with explicit loading, error and empty states. Reusable UI; do not duplicate core server rules in client as the only validation.
 

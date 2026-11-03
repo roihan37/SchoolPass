@@ -4,8 +4,8 @@ import {
   type OnModuleDestroy,
 } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '../generated/prisma/client.js';
-import { databaseUrl } from '../config/database-env.js';
+import { PrismaClient } from '../../generated/prisma/client.js';
+import { databaseUrl } from './database-env.js';
 
 @Injectable()
 export class PrismaService

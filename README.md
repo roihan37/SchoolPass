@@ -5,6 +5,22 @@ Fondasi Phase 00–02: React + TypeScript + Vite di `client/`, NestJS + TypeScri
 menambahkan empat model Prisma, migrasi, seed fiktif, dan provider database Nest.
 Phase 02 menambahkan login JWT serta akses anak sesuai role dan kepemilikan.
 
+## Struktur backend
+
+- `server/src/modules/`: fitur `auth`, `students`, dan `health`; controller tipis,
+  business logic dan pemeriksaan kepemilikan di service. DTO berada di fitur terkait.
+- `server/src/infrastructure/database/`: provider Prisma dan konfigurasi database.
+- `server/src/common/`: guard/decorator/identitas bersama dan utility password
+  yang juga dipakai seed. Registrasi global guard tetap dimiliki AuthModule.
+- `server/src/generated/prisma/`: output generator yang diabaikan Git.
+- `server/prisma/`: schema, migrasi, seed, dan persiapan database test.
+- Unit test berada dekat komponen; `server/test/` menyimpan tes HTTP/database
+  lintas module. Perintah development dan kontrak API tetap sama.
+
+`main.ts` menjalankan API. Worker akan memiliki proses dan entry point tersendiri
+pada fase queue; Redis, MinIO, BullMQ, dan worker belum diimplementasikan.
+Rincian batas module ada di [dokumen arsitektur](docs/ARCHITECTURE.md).
+
 ## Runtime dan versi teruji (3 November 2026)
 
 - macOS arm64; Node.js **24.18.1**, npm **11.16.0**, nvm **0.40.5**.

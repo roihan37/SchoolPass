@@ -5,5 +5,5 @@
     "incremental": false,
     "declaration": false
   },
-  "include": ["prisma/**/*.ts", "src/config/**/*.ts", "src/generated/**/*.ts"]
+  "include": ["prisma/**/*.ts", "src/infrastructure/database/**/*.ts", "src/generated/**/*.ts"]
 }
