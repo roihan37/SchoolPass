@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./.prisma-tools",
+    "incremental": false,
+    "declaration": false
+  },
+  "include": ["prisma/**/*.ts", "src/config/**/*.ts", "src/generated/**/*.ts"]
+}

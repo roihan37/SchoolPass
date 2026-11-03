@@ -1,9 +1,10 @@
 # REST API Contract
 
-Prefix: `/api/v1`. Require JWT except login.
+Prefix: `/api/v1`. Require JWT except login and public liveness `/health`. Phase 00 health checks the API process only, not database readiness.
 
 | Method | Path | Actor | Purpose |
 |---|---|---|---|
+| GET | /health | Public | Liveness: 200 with `{ "status": "ok" }` |
 | POST | /auth/login | Public | Authenticate email/password, issue JWT |
 | GET | /auth/me | Auth | Identity and role |
 | GET | /students/mine | Parent | Own children only |

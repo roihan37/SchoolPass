@@ -1,0 +1,83 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  PARENT
+  TEACHER
+}
+
+enum LeaveType {
+  SICK
+  PERMISSION
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model User {
+  id              String         @id @default(uuid()) @db.Uuid
+  name            String
+  email           String         @unique
+  passwordHash    String
+  role            Role
+  createdAt       DateTime       @default(now()) @db.Timestamptz(3)
+  classes         SchoolClass[]
+  children        Student[]
+  submittedLeaves LeaveRequest[] @relation("SubmittedLeaves")
+  reviewedLeaves  LeaveRequest[] @relation("ReviewedLeaves")
+}
+
+model SchoolClass {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String    @unique
+  teacherId String    @db.Uuid
+  teacher   User      @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  students  Student[]
+
+  @@index([teacherId])
+}
+
+model Student {
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String
+  parentId      String         @db.Uuid
+  classId       String         @db.Uuid
+  parent        User           @relation(fields: [parentId], references: [id], onDelete: Restrict)
+  schoolClass   SchoolClass    @relation(fields: [classId], references: [id], onDelete: Restrict)
+  leaveRequests LeaveRequest[]
+
+  @@index([parentId])
+  @@index([classId])
+}
+
+model LeaveRequest {
+  id             String      @id @default(uuid()) @db.Uuid
+  studentId      String      @db.Uuid
+  submittedById  String      @db.Uuid
+  absenceDate    DateTime    @db.Date
+  type           LeaveType
+  reason         String
+  status         LeaveStatus @default(PENDING)
+  reviewedById   String?     @db.Uuid
+  decisionReason String?
+  reviewedAt     DateTime?   @db.Timestamptz(3)
+  createdAt      DateTime    @default(now()) @db.Timestamptz(3)
+  student        Student     @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  submittedBy    User        @relation("SubmittedLeaves", fields: [submittedById], references: [id], onDelete: Restrict)
+  reviewedBy     User?       @relation("ReviewedLeaves", fields: [reviewedById], references: [id], onDelete: Restrict)
+
+  @@unique([studentId, absenceDate])
+  @@index([status, createdAt])
+}
