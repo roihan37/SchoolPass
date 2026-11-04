@@ -5,6 +5,8 @@ import { PrismaModule } from '../../infrastructure/database/prisma.module.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { AuthGuard } from '../../common/auth/auth.guard.js';
+import { CacheModule } from '../../infrastructure/cache/cache.module.js';
+import { LoginAttemptLimiterService } from './login-attempt-limiter.service.js';
 
 export function jwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -19,6 +21,7 @@ export function jwtSecret(): string {
 @Module({
   imports: [
     PrismaModule,
+    CacheModule,
     JwtModule.registerAsync({
       useFactory: () => ({
         secret: jwtSecret(),
@@ -37,6 +40,10 @@ export function jwtSecret(): string {
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, { provide: APP_GUARD, useClass: AuthGuard }],
+  providers: [
+    AuthService,
+    LoginAttemptLimiterService,
+    { provide: APP_GUARD, useClass: AuthGuard },
+  ],
 })
 export class AuthModule {}

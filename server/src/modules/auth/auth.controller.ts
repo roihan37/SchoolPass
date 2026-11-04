@@ -6,8 +6,10 @@ import {
   HttpCode,
   Inject,
   Post,
+  Req,
   ValidationPipe,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { AuthService } from './auth.service.js';
 import { CurrentUser, Public } from '../../common/auth/auth.decorators.js';
 import { LoginDto } from './dto/login.dto.js';
@@ -29,8 +31,12 @@ export class AuthController {
       }),
     )
     body: LoginDto,
+    @Req() request: Request,
   ) {
-    return this.auth.login(body);
+    return this.auth.login(
+      body,
+      request.ip ?? request.socket.remoteAddress ?? 'unknown',
+    );
   }
 
   @Get('me')

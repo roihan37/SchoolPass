@@ -18,6 +18,7 @@ describe('authentication and ownership (real PostgreSQL + HTTP)', () => {
     teacher: randomUUID(),
     otherTeacher: randomUUID(),
     empty: randomUUID(),
+    rateLimited: randomUUID(),
     schoolClass: randomUUID(),
     otherClass: randomUUID(),
     student: randomUUID(),
@@ -42,14 +43,24 @@ describe('authentication and ownership (real PostgreSQL + HTTP)', () => {
     jwt = app.get(JwtService);
     const passwordHash = await hashPassword(password);
     await prisma.$transaction(async (tx) => {
-      for (const id of [ids.parent, ids.other, ids.teacher, ids.otherTeacher, ids.empty]) {
+      for (const id of [
+        ids.parent,
+        ids.other,
+        ids.teacher,
+        ids.otherTeacher,
+        ids.empty,
+        ids.rateLimited,
+      ]) {
         await tx.user.create({
           data: {
             id,
             name: 'Akun Uji Fiktif',
             email: email(id),
             passwordHash,
-            role: id === ids.teacher || id === ids.otherTeacher ? 'TEACHER' : 'PARENT',
+            role:
+              id === ids.teacher || id === ids.otherTeacher
+                ? 'TEACHER'
+                : 'PARENT',
           },
         });
       }
@@ -108,12 +119,27 @@ describe('authentication and ownership (real PostgreSQL + HTTP)', () => {
       if (prisma)
         await prisma.$transaction(async (tx) => {
           await tx.student.deleteMany({
-            where: { id: { in: [ids.student, ids.otherStudent, ids.unassignedStudent] } },
+            where: {
+              id: {
+                in: [ids.student, ids.otherStudent, ids.unassignedStudent],
+              },
+            },
           });
-          await tx.schoolClass.deleteMany({ where: { id: { in: [ids.schoolClass, ids.otherClass] } } });
+          await tx.schoolClass.deleteMany({
+            where: { id: { in: [ids.schoolClass, ids.otherClass] } },
+          });
           await tx.user.deleteMany({
             where: {
-              id: { in: [ids.parent, ids.other, ids.teacher, ids.otherTeacher, ids.empty] },
+              id: {
+                in: [
+                  ids.parent,
+                  ids.other,
+                  ids.teacher,
+                  ids.otherTeacher,
+                  ids.empty,
+                  ids.rateLimited,
+                ],
+              },
             },
           });
         });
@@ -150,6 +176,22 @@ describe('authentication and ownership (real PostgreSQL + HTTP)', () => {
       .send({ email: email(randomUUID()), password })
       .expect(401);
     expect(unknown.body).toEqual(wrong.body);
+  });
+  it('limits repeated login attempts and returns the cooldown', async () => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({ email: email(ids.rateLimited), password: 'incorrect' })
+        .expect(401);
+    }
+
+    const blocked = await request(app.getHttpServer())
+      .post('/api/v1/auth/login')
+      .send({ email: email(ids.rateLimited), password: 'incorrect' })
+      .expect(429);
+
+    expect(blocked.body.retryAfterSeconds).toBeGreaterThan(0);
+    expect(blocked.body.retryAfterSeconds).toBeLessThanOrEqual(15 * 60);
   });
   it.each([
     { email: 'invalid', password: '1234567' },
@@ -210,9 +252,9 @@ describe('authentication and ownership (real PostgreSQL + HTTP)', () => {
     expect(JSON.stringify(response.body)).not.toContain('passwordHash');
     const otherToken = (await login(ids.other)).body.accessToken as string;
     const other = await get('students/mine', otherToken).expect(200);
-    expect(other.body.map((student: { id: string }) => student.id).sort()).toEqual(
-      [ids.otherStudent, ids.unassignedStudent].sort(),
-    );
+    expect(
+      other.body.map((student: { id: string }) => student.id).sort(),
+    ).toEqual([ids.otherStudent, ids.unassignedStudent].sort());
   });
   it('returns an empty list for a parent without children', async () => {
     const token = (await login(ids.empty)).body.accessToken as string;
@@ -223,12 +265,14 @@ describe('authentication and ownership (real PostgreSQL + HTTP)', () => {
   });
   it('lists only students in classes assigned to the authenticated teacher', async () => {
     const response = await get('students/assigned', teacherToken).expect(200);
-    expect(response.body.map((student: { id: string }) => student.id).sort()).toEqual(
-      [ids.student, ids.otherStudent].sort(),
-    );
+    expect(
+      response.body.map((student: { id: string }) => student.id).sort(),
+    ).toEqual([ids.student, ids.otherStudent].sort());
     expect(JSON.stringify(response.body)).not.toContain('passwordHash');
     await get('students/assigned', parentToken).expect(403);
-    await request(app.getHttpServer()).get('/api/v1/students/assigned').expect(401);
+    await request(app.getHttpServer())
+      .get('/api/v1/students/assigned')
+      .expect(401);
   });
   it('uses current DB role even with an older token', async () => {
     await prisma.user.update({

@@ -4,6 +4,30 @@
 05 - Private MinIO Attachments (IMPLEMENTED; verification recorded below).
 Tidak ada commit atau push. Catatan phase sebelumnya merupakan riwayat.
 
+## Login security — rate limiting
+- Login membatasi maksimal 10 percobaan per kombinasi IP dan email selama 15
+  menit. Percobaan valid menghapus penghitung; attempt ke-11 menerima HTTP 429
+  dengan `retryAfterSeconds`. Kegagalan koneksi Redis memberi HTTP 503 secara
+  fail-closed agar batas keamanan tidak bisa dilewati saat cache mati.
+- Redis Lua script menjalankan INCR, set expiry, dan membaca TTL sebagai satu
+  operasi atomik. Kunci Redis berisi SHA-256 dari IP/email lowercase agar data
+  mentah tidak tampak pada nama key. Tidak mengubah skema database atau menambah
+  dependency. IP didapat dari request yang dilihat Nest; deployment di belakang
+  reverse proxy perlu mengonfigurasi trusted proxy sesuai topologi.
+- Cakupan per IP/email mengurangi dampak salah satu orang berbagi NAT, namun
+  percobaan terdistribusi dengan IP berbeda tidak digabung menjadi satu akun.
+
+### Verifikasi aktual
+Perintah dijalankan dari `server/`:
+
+| Command | Hasil |
+|---|---|
+| `npm run lint` | PASS; 60 files, 0 warning/error |
+| `npm test -- src/modules/auth/login-attempt-limiter.service.spec.ts` | PASS; 4 tests, termasuk batas 10/11, key tersamarkan, reset sukses, dan Redis error 503 |
+| `npm run test:db` | PASS; 85 tests, 4 files; migration database test sudah mutakhir |
+| `npm run build` | PASS; Prisma Client 7.10.1 dan Nest build |
+| `git diff --check` | PASS |
+
 ## Phase 05 — changes and decisions
 - Compose kini menjalankan PostgreSQL dan MinIO lokal. MinIO API/Console hanya
   bind ke loopback (`9000`/`9001`), memakai volume persisten, dan bucket dibuat

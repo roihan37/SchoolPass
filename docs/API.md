@@ -28,6 +28,9 @@ Example decision: PATCH /leave-requests/:id/decision JSON `{ "status": "REJECTED
 - `POST /auth/login`: JSON `{ "email": "parent.a@example.test", "password": "<local seeded password>" }`.
   Email valid, maksimal 254 karakter; password string 8–256 karakter; field tambahan
   ditolak 400. Email dicocokkan persis dengan email yang tersimpan, tanpa normalisasi.
+  Maksimal 10 percobaan per kombinasi alamat IP dan email dalam 15 menit; percobaan
+  valid mereset penghitung. Percobaan ke-11 menerima 429 dengan `retryAfterSeconds`.
+  Penghitung disimpan secara atomik di Redis dan kunci tidak menyimpan IP/email mentah.
   Berhasil 200: `{ "accessToken": "<JWT>", "tokenType": "Bearer", "expiresIn": 900,
   "user": { "id": "<uuid>", "name": "<fictional name>", "email": "<email>", "role": "PARENT" } }`.
   Password salah maupun email tidak ditemukan mengembalikan pesan 401 yang sama.
@@ -45,7 +48,8 @@ Example decision: PATCH /leave-requests/:id/decision JSON `{ "status": "REJECTED
   database, bukan dipercaya dari klaim role token. JWT hilang/tidak valid => 401.
 - Tidak ada registrasi, refresh token, atau endpoint logout pada fase ini.
   Workflow pengajuan izin, lampiran, dashboard cache, dan in-app notifications
-  sudah diimplementasikan.
+  sudah diimplementasikan. Rate limit login menggunakan Redis; bila Redis tidak
+  tersedia, login gagal tertutup dengan 503 sampai koneksi pulih.
 
 ## Phase 03 — implemented leave workflow
 
