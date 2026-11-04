@@ -1,0 +1,31 @@
+import { Inject, Injectable, type OnModuleDestroy } from '@nestjs/common';
+import { REDIS_CACHE } from './cache.tokens.js';
+
+type RedisCacheClient = {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, mode: 'EX', seconds: number): Promise<string | null>;
+  del(...keys: string[]): Promise<number>;
+  quit(): Promise<string>;
+};
+
+@Injectable()
+export class RedisCacheService implements OnModuleDestroy {
+  constructor(@Inject(REDIS_CACHE) private readonly redis: RedisCacheClient) {}
+
+  async get<T>(key: string): Promise<T | null> {
+    const value = await this.redis.get(key);
+    return value === null ? null : (JSON.parse(value) as T);
+  }
+
+  async set<T>(key: string, value: T, ttlSeconds: number): Promise<void> {
+    await this.redis.set(key, JSON.stringify(value), 'EX', ttlSeconds);
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.redis.del(key);
+  }
+
+  async onModuleDestroy() {
+    await this.redis.quit();
+  }
+}

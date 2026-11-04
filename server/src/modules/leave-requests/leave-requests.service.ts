@@ -15,6 +15,8 @@ import type { CreateLeaveRequestDto } from './dto/create-leave-request.dto.js';
 import type { DecideLeaveRequestDto } from './dto/decide-leave-request.dto.js';
 import type { Express } from 'express';
 import { basename, win32 } from 'node:path';
+import { NotificationsService } from '../notifications/notifications.service.js';
+import { DashboardService } from '../dashboard/dashboard.service.js';
 
 const response = (leave: LeaveRequest) => ({
   ...leave,
@@ -28,6 +30,9 @@ export class LeaveRequestsService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(MinioStorageService) private readonly storage: MinioStorageService,
+    @Inject(NotificationsService)
+    private readonly notifications: NotificationsService,
+    @Inject(DashboardService) private readonly dashboard: DashboardService,
   ) {}
 
   private visibility(user: CurrentIdentity): Prisma.LeaveRequestWhereInput {
@@ -95,11 +100,11 @@ export class LeaveRequestsService {
       throw new BadRequestException('A rejection requires a decision reason');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const where = { id, ...this.visibility(user) };
       const leave = await tx.leaveRequest.findFirst({
         where,
-        select: { id: true },
+        select: { id: true, submittedById: true },
       });
       if (!leave) throw new NotFoundException('Leave request not found');
 
@@ -115,10 +120,20 @@ export class LeaveRequestsService {
       });
       if (updated.count !== 1)
         throw new ConflictException('The request has already been decided');
-      return response(
+      const leaveResponse = response(
         await tx.leaveRequest.findUniqueOrThrow({ where: { id } }),
       );
+      return { leaveResponse, notificationUserId: leave.submittedById };
     });
+    await this.dashboard.invalidate(user.id);
+    // Keputusan sudah commit; enqueue Redis terpisah, jadi transactional outbox
+    // diperlukan untuk menutup celah jika proses berhenti tepat di antara keduanya.
+    await this.notifications.enqueueDecision({
+      userId: result.notificationUserId,
+      leaveRequestId: id,
+      status: dto.status,
+    });
+    return result.leaveResponse;
   }
 
   async addAttachment(

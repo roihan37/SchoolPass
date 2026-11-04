@@ -8,6 +8,7 @@ import { PrismaService } from '../src/infrastructure/database/prisma.service.js'
 import { testDatabaseUrl } from '../src/infrastructure/database/database-env.js';
 import { hashPassword } from '../src/common/security/password.js';
 import { MinioStorageService } from '../src/infrastructure/storage/minio-storage.service.js';
+import { RedisCacheService } from '../src/infrastructure/cache/redis-cache.service.js';
 
 describe('leave workflow (real PostgreSQL + HTTP)', () => {
   let app: INestApplication;
@@ -39,6 +40,8 @@ describe('leave workflow (real PostgreSQL + HTTP)', () => {
     signDownload: vi.fn(async () => 'http://127.0.0.1:9000/signed-private-url'),
   };
   const base = '/api/v1/leave-requests';
+  const notificationsBase = '/api/v1/notifications';
+  const dashboardBase = '/api/v1/dashboard/summary';
   const valid = {
     studentId: ids.student,
     absenceDate: '2026-11-04',
@@ -132,6 +135,9 @@ describe('leave workflow (real PostgreSQL + HTTP)', () => {
     storage.put.mockClear();
     storage.remove.mockClear();
     storage.signDownload.mockClear();
+    await prisma.notification.deleteMany({
+      where: { leaveRequest: { studentId: { in: students } } },
+    });
     await prisma.attachment.deleteMany({
       where: { leaveRequest: { studentId: { in: students } } },
     });
@@ -144,6 +150,9 @@ describe('leave workflow (real PostgreSQL + HTTP)', () => {
     try {
       if (prisma)
         await prisma.$transaction(async (tx) => {
+          await tx.notification.deleteMany({
+            where: { leaveRequest: { studentId: { in: students } } },
+          });
           await tx.attachment.deleteMany({
             where: { leaveRequest: { studentId: { in: students } } },
           });
@@ -419,5 +428,86 @@ describe('leave workflow (real PostgreSQL + HTTP)', () => {
     expect(winner.body.decisionReason).toBe(
       winner.body.status === 'APPROVED' ? 'Disetujui fiktif' : 'Ditolak fiktif',
     );
+  });
+
+  it('lists notifications only for the authenticated user and is idempotent under replay', async () => {
+    const ownRequest = await pending();
+    const otherRequest = (
+      await create({ ...valid, studentId: ids.otherStudent }, ids.other).expect(
+        201,
+      )
+    ).body.id as string;
+    const { NotificationProcessor } = await import(
+      '../src/modules/notifications/notification.processor.js'
+    );
+    const processor = new NotificationProcessor(prisma);
+    const ownJob = {
+      userId: ids.parent,
+      leaveRequestId: ownRequest,
+      status: 'APPROVED' as const,
+    };
+    await processor.process(ownJob);
+    await processor.process(ownJob);
+    await processor.process({
+      userId: ids.other,
+      leaveRequestId: otherRequest,
+      status: 'REJECTED',
+    });
+
+    const own = await request(app.getHttpServer())
+      .get(notificationsBase)
+      .auth(tokens[ids.parent], { type: 'bearer' })
+      .expect(200);
+    expect(own.body).toHaveLength(1);
+    expect(own.body[0]).toMatchObject({
+      leaveRequestId: ownRequest,
+      type: 'LEAVE_DECIDED',
+      message: 'Permintaan izin Anda disetujui.',
+    });
+    expect(own.body[0]).not.toHaveProperty('userId');
+    await request(app.getHttpServer())
+      .get(notificationsBase)
+      .auth(tokens[ids.other], { type: 'bearer' })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toHaveLength(1);
+        expect(body[0].leaveRequestId).toBe(otherRequest);
+      });
+    await request(app.getHttpServer()).get(notificationsBase).expect(401);
+  });
+
+  it('caches only assigned-class counts and invalidates them after a decision', async () => {
+    const cache = app.get(RedisCacheService);
+    await cache.delete(`dashboard:summary:${ids.teacher}`);
+    await cache.delete(`dashboard:summary:${ids.otherTeacher}`);
+    const id = await pending();
+    const getSummary = (actor: string) =>
+      request(app.getHttpServer())
+        .get(dashboardBase)
+        .auth(tokens[actor], { type: 'bearer' });
+
+    const first = await getSummary(ids.teacher).expect(200);
+    expect(first.body).toMatchObject({
+      totals: { total: 1, pending: 1, approved: 0, rejected: 0 },
+    });
+    expect(
+      first.body.classes.map((item: { classId: string }) => item.classId),
+    ).toEqual([ids.classA]);
+    const otherTeacher = await getSummary(ids.otherTeacher).expect(200);
+    expect(otherTeacher.body).toMatchObject({
+      totals: { total: 0, pending: 0, approved: 0, rejected: 0 },
+      classes: [{ classId: ids.classB }],
+    });
+    await getSummary(ids.parent).expect(403);
+    await request(app.getHttpServer()).get(dashboardBase).expect(401);
+
+    await decide(id).expect(200);
+    const refreshed = await getSummary(ids.teacher).expect(200);
+    expect(refreshed.body.totals).toEqual({
+      total: 1,
+      pending: 0,
+      approved: 1,
+      rejected: 0,
+    });
   });
 });

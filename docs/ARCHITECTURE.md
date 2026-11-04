@@ -17,7 +17,7 @@ NestJS also calls MinIO object storage and Redis; BullMQ worker process consumes
 ## Backend boundaries
 Thin controllers, services own business logic, centralized Prisma access, DTO validation, guards plus record-level authorization in services. No external production credentials.
 
-### Backend layout (implemented through Phase 05)
+### Backend layout (implemented through Phase 06)
 - `server/src/modules/`: feature modules `auth`, `students`, `leave-requests`, and operational `health`.
   Controllers handle HTTP; services own business rules and record-level authorization.
   Login DTO lives in `auth/dto/`; unit tests live beside their tested components.
@@ -28,6 +28,12 @@ Thin controllers, services own business logic, centralized Prisma access, DTO va
   storage service. The bucket is created on first upload and no public access
   policy is configured. LeaveRequestsModule calls this adapter without owning
   SDK configuration.
+- `server/src/infrastructure/redis/`, `cache/`, and `queue/`: Redis connection,
+  cache-aside adapter, and BullMQ queue configuration/provider. Dashboard cache
+  keys are scoped by teacher ID and expire after 60 seconds.
+- `server/src/modules/notifications/` owns the authenticated notification list
+  and job processor; `server/src/modules/dashboard/` owns teacher summaries.
+  A unique notification constraint plus upsert makes job replay idempotent.
 - `server/src/common/auth/`: shared guard, decorators, identity/request types, and
   safe identity projection (without passwordHash). Common components do not import
   feature services. AuthModule still owns APP_GUARD registration and JWT configuration;
@@ -48,21 +54,21 @@ Thin controllers, services own business logic, centralized Prisma access, DTO va
   PostgreSQL, and compensates for a failed metadata insert by deleting the
   uploaded object.
 
-### API and worker processes (future queue phase)
-The API remains the only implemented application process. When the queue phase is
-approved, add a separate worker entry point/module using a Nest application context
-without an HTTP listener. It imports only required providers, rather than AppModule
-and its HTTP controllers/guards. Both processes share one codebase and PostgreSQL;
-the API enqueues BullMQ jobs and the worker consumes them through Redis.
-Redis and BullMQ connection integrations will live under infrastructure;
-business job handling belongs with the relevant feature. No empty integration or
-worker directories are created before the corresponding implementation phase.
+### API and worker processes
+`main.ts` bootstraps the HTTP API; `worker.ts` bootstraps a Nest application
+context without an HTTP listener. The worker imports only required providers,
+rather than AppModule and its HTTP controllers/guards. Both processes share one
+codebase and PostgreSQL; the API enqueues BullMQ jobs and the worker consumes
+them through Redis. After a committed decision, API invalidates the assigned
+teacher's dashboard key and enqueues `leave.decided`. Enqueue is a separate Redis
+operation, so a process failure between the PostgreSQL commit and queue add can
+lose the notification. A transactional outbox is a future reliability option.
 
 ## Frontend boundaries
 React + Vite + TypeScript; use a small consistent design system (Button, TextInput, Select, StatusBadge, DataTable, Dialog) with explicit loading, error and empty states. Reusable UI; do not duplicate core server rules in client as the only validation.
 
 ## Conventions
-Start with npm for fewer toolchains. Choose supported Node LTS and pin compatible versions. Document ESM/Prisma choices; no accidental major upgrade or mixing tutorials. Local Compose runs PostgreSQL and MinIO; Redis waits for the queue/cache phase.
+Start with npm for fewer toolchains. Choose supported Node LTS and pin compatible versions. Document ESM/Prisma choices; no accidental major upgrade or mixing tutorials. Local Compose runs PostgreSQL, MinIO, and Redis.
 
 ## Security and reliability
 JWT secrets stay local in .env (ignored); hash passwords. Avoid logging sensitive token/file data. File upload: size/type verification, private bucket, secure object keys, authorized access. Worker retries must not create duplicates. No public enrollment; seed only.

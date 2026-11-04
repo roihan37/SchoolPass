@@ -14,8 +14,8 @@ Prefix: `/api/v1`. Require JWT except login and public liveness `/health`. Phase
 | PATCH | /leave-requests/:id/decision | Teacher | APPROVED/REJECTED (once) |
 | POST | /leave-requests/:id/attachment | Parent | Upload optional file while pending |
 | GET | /leave-requests/:id/attachment-url | Parent/Teacher | Authorized signed download |
-| GET | /dashboard/summary | Teacher | Own class counts, cached (P1) |
-| GET | /notifications | Auth | Own notifications (P1) |
+| GET | /dashboard/summary | Teacher | Own class counts, Redis cache TTL 60 sec |
+| GET | /notifications | Auth | Own in-app notifications |
 | PATCH | /notifications/:id/read | Auth | Mark own notification read (P1) |
 
 Expected errors: validation 400; authentication 401; forbidden 403; not found 404; duplicate/decided 409. Be consistent and document deliberate decisions to avoid revealing existence of unauthorized data.
@@ -41,8 +41,8 @@ Example decision: PATCH /leave-requests/:id/decision JSON `{ "status": "REJECTED
   `schoolpass-api`, dan UUID subject. Masa berlaku 900 detik. Role terbaru dibaca dari
   database, bukan dipercaya dari klaim role token. JWT hilang/tidak valid => 401.
 - Tidak ada registrasi, refresh token, atau endpoint logout pada fase ini.
-  Workflow pengajuan izin dan lampiran sudah diimplementasikan; dashboard cache
-  dan notifications masih menunggu fase P1 berikutnya.
+  Workflow pengajuan izin, lampiran, dashboard cache, dan in-app notifications
+  sudah diimplementasikan.
 
 ## Phase 03 — implemented leave workflow
 
@@ -82,6 +82,25 @@ Implementasi mempertahankan Prisma 7.10.1 dan mengikuti referensi resmi
 [Prisma Client v7](https://www.prisma.io/docs/orm/v7/reference/prisma-client-reference)
 untuk updateMany dan P2002, serta
 [ValidationPipe NestJS](https://docs.nestjs.com/techniques/validation).
+
+## Phase 06 — notifications and dashboard summary
+
+- `GET /notifications`: Parent/Teacher dengan JWT; hanya baris milik user dari
+  identitas terverifikasi, terbaru dahulu. Respons berupa array objek
+  `{ id, leaveRequestId, type, message, readAt, createdAt }`; `userId` tidak
+  diekspos. Read status tersedia di data tetapi belum ada endpoint untuk
+  menandai sudah dibaca.
+- Keputusan izin yang sudah tersimpan mengirim job `leave.decided` ke BullMQ.
+  Worker menulis notifikasi ke PostgreSQL; retry maksimal 5 percobaan dengan
+  exponential backoff awal 1 detik. Unique `(userId, leaveRequestId, type)` dan
+  upsert menjaga pemrosesan ulang tetap idempotent.
+- `GET /dashboard/summary`: Teacher saja; merangkum total/pending/approved/
+  rejected per kelas yang ditugaskan serta total gabungan. Cache Redis per ID
+  guru berlaku 60 detik, diinvalidasi setelah keputusan berhasil tersimpan.
+  Jika Redis cache gagal, ringkasan tetap dibaca dari PostgreSQL.
+- Commit keputusan PostgreSQL dan enqueue Redis belum atomik. Jika proses gagal
+  di antara keduanya, keputusan tetap tersimpan tanpa job; transactional outbox
+  menjadi perbaikan lanjutan.
 
 ## Phase 05 — implemented private attachments
 

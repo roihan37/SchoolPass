@@ -26,6 +26,10 @@ enum LeaveStatus {
   REJECTED
 }
 
+enum NotificationType {
+  LEAVE_DECIDED
+}
+
 model User {
   id              String         @id @default(uuid()) @db.Uuid
   name            String
@@ -37,6 +41,7 @@ model User {
   children        Student[]
   submittedLeaves LeaveRequest[] @relation("SubmittedLeaves")
   reviewedLeaves  LeaveRequest[] @relation("ReviewedLeaves")
+  notifications   Notification[]
 }
 
 model SchoolClass {
@@ -63,21 +68,22 @@ model Student {
 }
 
 model LeaveRequest {
-  id             String      @id @default(uuid()) @db.Uuid
-  studentId      String      @db.Uuid
-  submittedById  String      @db.Uuid
-  absenceDate    DateTime    @db.Date
+  id             String         @id @default(uuid()) @db.Uuid
+  studentId      String         @db.Uuid
+  submittedById  String         @db.Uuid
+  absenceDate    DateTime       @db.Date
   type           LeaveType
   reason         String
-  status         LeaveStatus @default(PENDING)
-  reviewedById   String?     @db.Uuid
+  status         LeaveStatus    @default(PENDING)
+  reviewedById   String?        @db.Uuid
   decisionReason String?
-  reviewedAt     DateTime?   @db.Timestamptz(3)
-  createdAt      DateTime    @default(now()) @db.Timestamptz(3)
-  student        Student     @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  submittedBy    User        @relation("SubmittedLeaves", fields: [submittedById], references: [id], onDelete: Restrict)
-  reviewedBy     User?       @relation("ReviewedLeaves", fields: [reviewedById], references: [id], onDelete: Restrict)
+  reviewedAt     DateTime?      @db.Timestamptz(3)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(3)
+  student        Student        @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  submittedBy    User           @relation("SubmittedLeaves", fields: [submittedById], references: [id], onDelete: Restrict)
+  reviewedBy     User?          @relation("ReviewedLeaves", fields: [reviewedById], references: [id], onDelete: Restrict)
   attachment     Attachment?
+  notifications  Notification[]
 
   @@unique([studentId, absenceDate])
   @@index([status, createdAt])
@@ -91,4 +97,19 @@ model Attachment {
   mimeType       String
   fileSize       Int
   leaveRequest   LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Restrict)
+}
+
+model Notification {
+  id             String           @id @default(uuid()) @db.Uuid
+  userId         String           @db.Uuid
+  leaveRequestId String           @db.Uuid
+  type           NotificationType
+  message        String
+  readAt         DateTime?        @db.Timestamptz(3)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  leaveRequest   LeaveRequest     @relation(fields: [leaveRequestId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, leaveRequestId, type])
+  @@index([userId, createdAt])
 }

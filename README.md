@@ -1,11 +1,13 @@
 # SchoolPass
 
-Fondasi Phase 00–05: React + TypeScript + Vite di `client/`, NestJS + TypeScript di
+Fondasi Phase 00–06: React + TypeScript + Vite di `client/`, NestJS + TypeScript di
 `server/`, PostgreSQL, dan MinIO sebagai service Docker Compose. Phase 01
 menambahkan empat model Prisma, migrasi, seed fiktif, dan provider database Nest.
 Phase 02 menambahkan login JWT serta akses anak sesuai role dan kepemilikan.
 Phase 03 menambahkan backend pengajuan izin dan keputusan final guru. Phase 05
-menambahkan lampiran privat MinIO untuk pengajuan yang masih PENDING.
+menambahkan lampiran privat MinIO untuk pengajuan yang masih PENDING. Phase 06
+menambahkan antrean notifikasi BullMQ/Redis dengan worker terpisah, notifikasi
+dalam aplikasi, dan ringkasan dashboard guru dengan cache 60 detik.
 
 ## Struktur backend
 
@@ -20,8 +22,8 @@ menambahkan lampiran privat MinIO untuk pengajuan yang masih PENDING.
 - Unit test berada dekat komponen; `server/test/` menyimpan tes HTTP/database
   lintas module. Perintah development dan kontrak API tetap sama.
 
-`main.ts` menjalankan API. Worker akan memiliki proses dan entry point tersendiri
-pada fase queue; Redis, BullMQ, dan worker belum diimplementasikan.
+`main.ts` menjalankan API dan `worker.ts` menjalankan proses worker tersendiri.
+Keduanya memakai konfigurasi Redis/BullMQ yang sama.
 Rincian batas module ada di [dokumen arsitektur](docs/ARCHITECTURE.md).
 
 ## Runtime dan versi teruji (3 November 2026)
@@ -114,6 +116,17 @@ npm run prisma:deploy
 npm run prisma:seed
 PORT=3001 npm run start:dev
 ```
+
+Di terminal server kedua, jalankan worker agar antrean `leave.decided` diproses:
+
+```sh
+cd server
+npm run worker:dev
+```
+
+Compose menjalankan Redis di `127.0.0.1:56379`; `REDIS_URL` di `.env` root
+menunjuk ke alamat tersebut. Worker production dijalankan dengan
+`npm run worker:prod` setelah `npm run build`.
 
 Terminal frontend:
 
@@ -243,7 +256,8 @@ otorisasi tetap perlu autentikasi dan pemeriksaan kepemilikan pada fase berikutn
 FK sendiri tidak menjamin role orang tua/guru atau identitas pengaju.
 
 Phase 02 menambahkan JWT dan GET `/api/v1/students/mine` dengan filter kepemilikan
-berdasarkan identitas terverifikasi. React, MinIO, Redis, dan BullMQ belum ditambahkan.
+berdasarkan identitas terverifikasi. Fitur antrean, notifikasi, dan dashboard
+dijelaskan di bagian Phase 06.
 
 ## Autentikasi lokal — Phase 02
 
@@ -396,6 +410,22 @@ dan 30 tes PostgreSQL/HTTP lulus. Login akun seed lama dan health hasil build HT
 200 terverifikasi; kasus 401/403 juga lulus. Client tidak berubah; lint/build
 client diulang dan lulus. Tidak ada perubahan schema/migrasi. Detail perintah dan kegagalan awal
 tersimpan di [harness/progress.md](harness/progress.md).
+
+## Phase 06 — Redis, antrean, dan dashboard
+
+Sesudah guru memutuskan pengajuan, API menginvalidasi cache ringkasan guru lalu
+mengirim job `leave.decided`. Worker dijalankan terpisah dengan `npm run worker:dev`.
+BullMQ mencoba ulang job maksimal lima kali dengan exponential backoff mulai 1
+detik. Processor memakai unique key `(userId, leaveRequestId, type)` dan upsert,
+sehingga pengulangan job tidak menggandakan notifikasi. Parent maupun Teacher
+hanya membaca notifikasi milik akun JWT mereka di `GET /api/v1/notifications`.
+Guru mendapat `GET /api/v1/dashboard/summary`; isinya hanya kelas yang ditugaskan,
+di-cache Redis selama 60 detik dan dihapus setelah keputusan.
+
+Update keputusan PostgreSQL dan enqueue Redis bukan satu transaksi. Jika enqueue
+gagal sesudah keputusan tersimpan, notifikasi dapat tertunda/hilang sampai ada
+mekanisme pemulihan. Transactional outbox adalah opsi untuk memperkuat jaminan
+delivery di fase lanjutan.
 
 Audit runtime server dan audit client: 0 temuan. Audit penuh server masih keluar
 dengan status gagal: **2 moderate** pada Nest CLI/minimatch

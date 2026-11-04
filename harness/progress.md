@@ -640,3 +640,43 @@ Next: tunggu review manusia dan persetujuan eksplisit sebelum Phase 01.
   http://127.0.0.1:3001/api/v1/health` gagal tersambung (API belum berjalan).
   Karena itu alur Parent/Teacher melalui browser dan unduh berkas belum
   diverifikasi terhadap layanan hidup.
+
+## Phase 06 — Redis queue, notifications, and dashboard cache — 2026-11-04
+- Menambahkan Redis Compose pada `127.0.0.1:56379` dengan AOF, volume persisten,
+  healthcheck, dan `noeviction`; koneksi aplikasi berasal dari `REDIS_URL`.
+- Menambahkan migrasi Prisma model `Notification`, enum `NotificationType`,
+  FK ke user/pengajuan izin, index daftar per user, dan unique
+  `(userId, leaveRequestId, type)` untuk idempotensi.
+- Keputusan guru yang committed menginvalidasi cache ringkasan guru lalu
+  mengirim job `leave.decided`; retry BullMQ maksimal 5 kali dengan exponential
+  backoff mulai 1 detik. Worker dapat dijalankan terpisah lewat
+  `cd server && npm run worker:dev` atau, setelah build,
+  `npm run worker:prod`.
+- `GET /api/v1/notifications` memberi notifikasi sesuai user JWT tanpa `userId`.
+  `GET /api/v1/dashboard/summary` hanya untuk Teacher dan menghitung kelas
+  tugasnya; cache per guru berlaku 60 detik, dengan fallback baca PostgreSQL
+  saat cache gagal.
+- File implementasi meliputi `compose.yaml`, `.env.example`, README dan dokumen
+  API/arsitektur, package manifest/lock server, schema dan migrasi Prisma,
+  provider Redis/cache/queue, modul dashboard/notifikasi, bootstrap worker,
+  integrasi keputusan izin, serta test database.
+- Verifikasi aktual di `server/`:
+  - `npm run lint`: PASS, 0 warning dan 0 error.
+  - `npm test`: PASS, 4 file dan 13 test.
+  - `npm run test:db`: PASS, 4 file dan 80 test; migrasi test DB sudah terapan.
+    Test antrean mengirim job ke Redis riil dan memverifikasi dua kegagalan
+    pemrosesan transien lalu selesai pada percobaan ketiga.
+  - `npm run build`: PASS; Prisma Client dihasilkan dan Nest build selesai.
+  - `git diff --check`: PASS.
+- Test retry mensimulasikan error transien pada processor, bukan mematikan proses
+  worker secara mendadak. Semantik job retry diuji terhadap Redis/BullMQ yang
+  hidup. Tidak ada endpoint mark-as-read pada scope ini.
+- Risiko consistency yang diketahui: keputusan PostgreSQL dan enqueue Redis
+  bukan satu transaksi. Jika API crash di antara keduanya, pengajuan sudah final
+  tetapi notifikasi mungkin tidak dibuat; transactional outbox adalah tindak
+  lanjut. Invalidasi cache juga fail-open dan TTL 60 detik membatasi cache basi
+  jika operasi delete Redis gagal.
+- Tidak ada commit dibuat.
+
+Next: review Phase 06; transactional outbox dan mark-as-read dapat menjadi
+pekerjaan berikutnya setelah persetujuan task baru.
