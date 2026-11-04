@@ -33,12 +33,15 @@
     "test:db": "npm run tools:build && node .prisma-tools/prisma/prepare-test.js && vitest run --config vitest.config.database.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1161.0",
+    "@aws-sdk/s3-request-presigner": "3.1161.0",
     "@nestjs/common": "12.3.2",
     "@nestjs/core": "12.3.2",
     "@nestjs/jwt": "12.0.3",
     "@nestjs/platform-express": "12.3.2",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
+    "@types/multer": "2.3.0",
     "class-transformer": "0.5.1",
     "class-validator": "0.15.1",
     "pg": "8.23.1",

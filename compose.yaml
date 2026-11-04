@@ -16,5 +16,19 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+  minio:
+    build:
+      context: ./docker/minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Isi MINIO_ROOT_USER di .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Isi MINIO_ROOT_PASSWORD di .env}
+    command: ["server", "/data", "--console-address", ":9001"]
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
 volumes:
   postgres_data:
+  minio_data:

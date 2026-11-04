@@ -1,8 +1,67 @@
 # SchoolPass Progress Log
 
 ## Current phase
-04 - React Frontend Vertical Slice + local API CORS (IMPLEMENTED; backend integration flow needs verification).
-Tidak ada commit atau push. Catatan Phase 00–03 di bawah merupakan riwayat.
+05 - Private MinIO Attachments (IMPLEMENTED; verification recorded below).
+Tidak ada commit atau push. Catatan phase sebelumnya merupakan riwayat.
+
+## Phase 05 — changes and decisions
+- Compose kini menjalankan PostgreSQL dan MinIO lokal. MinIO API/Console hanya
+  bind ke loopback (`9000`/`9001`), memakai volume persisten, dan bucket dibuat
+  privat saat upload pertama. Credential MinIO lokal ada di `.env` yang ignored;
+  `.env.example` hanya memberi nilai contoh tanpa password.
+- Image MinIO dibangun dari source pada commit upstream yang dipin karena image
+  rilis lama yang diperiksa tidak tersedia. Container berjalan sebagai user
+  non-root. Upstream MinIO sudah diarsipkan; image ini perlu ditinjau/ditukar
+  dengan distribusi storage yang dipelihara sebelum penggunaan produksi.
+- Menambahkan model Attachment satu-ke-satu dengan LeaveRequest, unique
+  `leaveRequestId` dan `objectKey`, serta FK `ON DELETE RESTRICT`. Bytes berada
+  di object storage, sedangkan PostgreSQL menyimpan metadata.
+- Endpoint Parent mengunggah maksimal satu PDF/JPEG/PNG berukuran 5 MiB saat
+  pengajuan masih PENDING. MIME dan magic bytes diperiksa. Kunci object acak
+  dibuat server; metadata tidak mengungkap object key. URL unduh berumur 300
+  detik hanya ditandatangani setelah service memeriksa pemilik Parent atau kelas
+  Teacher yang ditugaskan. Jika insert metadata gagal, object dihapus sebagai
+  kompensasi (kegagalan cleanup dicatat tanpa data sensitif).
+- MinIO diisolasi pada `infrastructure/storage`; leave-request service tetap
+  memegang aturan bisnis/otorisasi. Tidak menambah UI, Prisma model lain, Redis,
+  MinIO client side SDK, BullMQ, atau worker.
+
+## Phase 05 — actual verification
+Perintah server dijalankan dari `server/`, repository root untuk Compose.
+
+| Command/check | Result |
+|---|---|
+| `npm run prisma:format && npm run prisma:validate && npm run prisma:generate` | PASS; Prisma 7.10.1, schema valid |
+| `npm run lint` | PASS; 39 files, 0 errors/warnings |
+| `npm test` | PASS; 13 tests, 4 files |
+| `npx tsc --noEmit && npx tsc --noEmit -p tsconfig.tools.json` | PASS |
+| `npm run test:e2e` | PASS; 6 tests |
+| `npm run build` | PASS; Prisma generate and Nest build |
+| `docker compose config --quiet && docker compose up -d --build --wait && docker compose ps` | PASS; MinIO image built locally; PostgreSQL and MinIO healthy/running |
+| `npm run prisma:deploy` | PASS; attachment migration applied |
+| `npm run test:db` | PASS; 77 tests, 3 files against PostgreSQL `_test`; both migrations applied |
+| `curl -sS -o /dev/null -w 'MinIO liveness HTTP %{http_code}\\n' http://127.0.0.1:9000/minio/health/live` | PASS; HTTP 200 |
+| Built `MinioStorageService` direct smoke: upload, signed GET, byte comparison, delete | PASS; GET HTTP 200, bytes match, cleanup completed |
+| `git diff --check` | PASS |
+
+Sandbox initially denied local network/Docker socket access (`EPERM`); affected
+commands were rerun with approved local access and passed. Earlier e2e retry also
+fixed a cyclic Nest provider import by moving the S3 token to its own file.
+Initial typecheck/lint surfaced missing Multer type inclusion and a lint warning;
+both were fixed and final checks passed.
+
+## Phase 05 — limitations
+- Automated database HTTP tests replace MinIO with a storage mock. The real
+  MinIO adapter was separately exercised for upload, signed download, byte
+  integrity, and cleanup; the complete HTTP endpoint with PostgreSQL and MinIO
+  together was not separately exercised. Browser access to presigned URLs also
+  needs MinIO CORS configuration for the frontend origin.
+- The upstream source build makes the demo reproducible at a pinned commit but
+  can take several minutes and the archived MinIO project does not receive
+  ongoing security updates. Do not treat this image as a production deployment.
+- Uploaded file bytes use Multer memory storage, capped at 5 MiB; this is
+  appropriate for the requested demo limit but should be revisited for larger
+  files/concurrent production traffic.
 
 ## Phase 04 — changes and decisions
 - Mengganti placeholder React dengan login dan dashboard berbasis role Parent/Teacher.

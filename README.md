@@ -1,16 +1,18 @@
 # SchoolPass
 
-Fondasi Phase 00–03: React + TypeScript + Vite di `client/`, NestJS + TypeScript di
-`server/`, dan PostgreSQL sebagai satu-satunya service Docker Compose. Phase 01
+Fondasi Phase 00–05: React + TypeScript + Vite di `client/`, NestJS + TypeScript di
+`server/`, PostgreSQL, dan MinIO sebagai service Docker Compose. Phase 01
 menambahkan empat model Prisma, migrasi, seed fiktif, dan provider database Nest.
 Phase 02 menambahkan login JWT serta akses anak sesuai role dan kepemilikan.
-Phase 03 menambahkan backend pengajuan izin dan keputusan final guru.
+Phase 03 menambahkan backend pengajuan izin dan keputusan final guru. Phase 05
+menambahkan lampiran privat MinIO untuk pengajuan yang masih PENDING.
 
 ## Struktur backend
 
 - `server/src/modules/`: fitur `auth`, `students`, `leave-requests`, dan `health`; controller tipis,
   business logic dan pemeriksaan kepemilikan di service. DTO berada di fitur terkait.
 - `server/src/infrastructure/database/`: provider Prisma dan konfigurasi database.
+- `server/src/infrastructure/storage/`: adapter MinIO/S3 untuk object privat.
 - `server/src/common/`: guard/decorator/identitas bersama dan utility password
   yang juga dipakai seed. Registrasi global guard tetap dimiliki AuthModule.
 - `server/src/generated/prisma/`: output generator yang diabaikan Git.
@@ -19,7 +21,7 @@ Phase 03 menambahkan backend pengajuan izin dan keputusan final guru.
   lintas module. Perintah development dan kontrak API tetap sama.
 
 `main.ts` menjalankan API. Worker akan memiliki proses dan entry point tersendiri
-pada fase queue; Redis, MinIO, BullMQ, dan worker belum diimplementasikan.
+pada fase queue; Redis, BullMQ, dan worker belum diimplementasikan.
 Rincian batas module ada di [dokumen arsitektur](docs/ARCHITECTURE.md).
 
 ## Runtime dan versi teruji (3 November 2026)
@@ -52,8 +54,8 @@ mengikuti lockfile, gunakan perintah berikut (juga telah diuji):
 
 Siapkan `.env` lokal. `.env.example` menunjukkan variabel yang diperlukan dan
 sengaja tidak menyimpan password. Perintah berikut membuat password acak lokal,
-tidak menampilkannya. `.env` yang sudah ada dipertahankan; `SEED_PASSWORD` dan
-`JWT_SECRET` ditambahkan bila variabelnya belum ada. Nilai kosong yang sudah ada
+tidak menampilkannya. `.env` yang sudah ada dipertahankan; password PostgreSQL,
+MinIO, `SEED_PASSWORD`, dan `JWT_SECRET` ditambahkan bila variabelnya belum ada. Nilai kosong yang sudah ada
 perlu diisi manual. Memerlukan Python 3.
 
 ```sh
@@ -62,8 +64,11 @@ from pathlib import Path
 import secrets
 p = Path('.env')
 if not p.exists():
-    p.write_text('POSTGRES_DB=schoolpass\nPOSTGRES_USER=schoolpass\nPOSTGRES_PASSWORD=' + secrets.token_hex(24) + '\n')
+    p.write_text('POSTGRES_DB=schoolpass\nPOSTGRES_USER=schoolpass\n')
 text = p.read_text()
+for key, value in [('POSTGRES_PASSWORD', secrets.token_hex(24)), ('MINIO_ROOT_USER', 'schoolpass-local'), ('MINIO_ROOT_PASSWORD', secrets.token_hex(24))]:
+    if not any(line.startswith(key + '=') for line in text.splitlines()):
+        text = text.rstrip() + '\n' + key + '=' + value + '\n'
 if not any(line.startswith('SEED_PASSWORD=') for line in text.splitlines()):
     text = text.rstrip() + '\nSEED_PASSWORD=' + secrets.token_hex(24) + '\n'
 if not any(line.startswith('JWT_SECRET=') for line in text.splitlines()):
@@ -78,7 +83,7 @@ Jalankan Docker Desktop, kemudian database:
 ```sh
 docker desktop start
 docker compose config --quiet
-docker compose up -d --wait
+docker compose up -d --build --wait
 docker compose ps
 docker compose exec -T postgres sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" && psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT version();"'
 ```
@@ -87,6 +92,12 @@ Database: `127.0.0.1:55432` menuju port container `5432`. Port host `5432` sudah
 digunakan PostgreSQL lokal pada mesin pengujian. Volume `postgres_data` menyimpan
 data saat container diganti. Perubahan password pada `.env` tidak otomatis
 mengubah password database yang sudah diinisialisasi di volume.
+
+MinIO Console tersedia di <http://127.0.0.1:9001>, API S3 di
+<http://127.0.0.1:9000>. Login memakai `MINIO_ROOT_USER` dan
+`MINIO_ROOT_PASSWORD` dari `.env`; Compose mengikat keduanya hanya ke loopback.
+Server membuat bucket privat saat upload pertama. Untuk lingkungan selain demo
+lokal, gunakan akun service dengan izin bucket terbatas, bukan root MinIO.
 
 API mengizinkan request browser hanya dari origin frontend lokal
 `http://127.0.0.1:5173` dan `http://localhost:5173`; origin lain tidak mendapat
@@ -350,6 +361,29 @@ Perintah verifikasi server tetap seperti bagian sebelumnya; `test:db` juga
 menguji HTTP workflow izin dan race create/decision terhadap PostgreSQL `_test`.
 
 ## Hasil dan batasan
+
+## Lampiran privat — Phase 05
+
+Jalankan Compose dengan `docker compose up -d --build --wait` agar PostgreSQL dan
+MinIO hidup. Parent dapat mengunggah satu PDF/JPEG/PNG (maksimal 5 MiB) hanya
+selama pengajuan PENDING:
+
+```bash
+curl -i -X POST "http://127.0.0.1:3001/api/v1/leave-requests/$LEAVE_ID/attachment" \\
+  -H "Authorization: Bearer $PARENT_TOKEN" \\
+  -F 'file=@./surat.pdf;type=application/pdf'
+
+curl -fsS "http://127.0.0.1:3001/api/v1/leave-requests/$LEAVE_ID/attachment-url" \\
+  -H "Authorization: Bearer $PARENT_TOKEN"
+```
+
+URL unduhan juga bisa diminta Teacher yang ditugaskan ke kelas request. Server
+memeriksa akses sebelum menandatangani URL GET yang berlaku 5 menit. Respons
+metadata tidak mengungkap object key; bytes berada pada volume MinIO dan metadata
+di tabel `Attachment`. Bucket tidak diberi policy publik. MinIO dibangun dari
+source upstream pada commit yang dipin di Dockerfile karena image rilis upstream
+tidak tersedia; repository upstream diarsipkan, sehingga pin dapat diulang tetapi
+tidak menerima pembaruan keamanan.
 
 Phase 03: format, lint (0 warning/error), typecheck aplikasi/tooling, dan build
 server lulus; 13 unit test, 4 tes e2e (termasuk health), serta 74 tes database/HTTP

@@ -12,8 +12,8 @@ Prefix: `/api/v1`. Require JWT except login and public liveness `/health`. Phase
 | GET | /leave-requests | Parent/Teacher | Filter by ownership/class |
 | GET | /leave-requests/:id | Parent/Teacher | Authorized detail |
 | PATCH | /leave-requests/:id/decision | Teacher | APPROVED/REJECTED (once) |
-| POST | /leave-requests/:id/attachment | Parent | Upload optional file while pending (P1) |
-| GET | /leave-requests/:id/attachment-url | Parent/Teacher | Authorized signed download (P1) |
+| POST | /leave-requests/:id/attachment | Parent | Upload optional file while pending |
+| GET | /leave-requests/:id/attachment-url | Parent/Teacher | Authorized signed download |
 | GET | /dashboard/summary | Teacher | Own class counts, cached (P1) |
 | GET | /notifications | Auth | Own notifications (P1) |
 | PATCH | /notifications/:id/read | Auth | Mark own notification read (P1) |
@@ -41,7 +41,8 @@ Example decision: PATCH /leave-requests/:id/decision JSON `{ "status": "REJECTED
   `schoolpass-api`, dan UUID subject. Masa berlaku 900 detik. Role terbaru dibaca dari
   database, bukan dipercaya dari klaim role token. JWT hilang/tidak valid => 401.
 - Tidak ada registrasi, refresh token, atau endpoint logout pada fase ini.
-  Seluruh endpoint P1 pada tabel belum diimplementasikan.
+  Workflow pengajuan izin dan lampiran sudah diimplementasikan; dashboard cache
+  dan notifications masih menunggu fase P1 berikutnya.
 
 ## Phase 03 — implemented leave workflow
 
@@ -81,3 +82,24 @@ Implementasi mempertahankan Prisma 7.10.1 dan mengikuti referensi resmi
 [Prisma Client v7](https://www.prisma.io/docs/orm/v7/reference/prisma-client-reference)
 untuk updateMany dan P2002, serta
 [ValidationPipe NestJS](https://docs.nestjs.com/techniques/validation).
+
+## Phase 05 — implemented private attachments
+
+- `POST /leave-requests/:id/attachment`: Parent saja, multipart field bernama
+  `file`, maksimal 5 MiB dan satu file. Hanya PDF, JPEG, PNG yang MIME type dan
+  magic bytes awalnya cocok diterima. Request harus milik Parent dan masih
+  PENDING; satu attachment per request. Berhasil 201 dengan metadata tanpa
+  object key atau byte berkas.
+- `GET /leave-requests/:id/attachment-url`: Parent pemilik atau Teacher yang
+  ditugaskan pada kelas request. Menghasilkan metadata dan presigned GET URL
+  berumur 300 detik; selain pemilik/kelas mendapat 404. Pengajuan tanpa lampiran
+  juga 404.
+- Metadata disimpan di PostgreSQL; bytes disimpan di bucket MinIO privat. Object
+  key dibuat server dengan UUID. Bila insert metadata gagal sesudah upload,
+  server mencoba menghapus object sebagai kompensasi.
+- Untuk browser, URL bertanda tangan menuju MinIO langsung; konfigurasi CORS
+  MinIO perlu mengizinkan origin frontend jika browser akan membuka URL itu.
+  Demo backend dapat mengambil URL dengan `curl`.
+
+SDK memakai AWS SDK for JavaScript v3 yang kompatibel dengan S3, termasuk
+[presigner package resmi](https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/Package/-aws-sdk-s3-request-presigner/).

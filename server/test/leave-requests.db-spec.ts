@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module.js';
 import { PrismaService } from '../src/infrastructure/database/prisma.service.js';
 import { testDatabaseUrl } from '../src/infrastructure/database/database-env.js';
 import { hashPassword } from '../src/common/security/password.js';
+import { MinioStorageService } from '../src/infrastructure/storage/minio-storage.service.js';
 
 describe('leave workflow (real PostgreSQL + HTTP)', () => {
   let app: INestApplication;
@@ -32,6 +33,11 @@ describe('leave workflow (real PostgreSQL + HTTP)', () => {
     ids.otherTeacher,
   ];
   const tokens: Record<string, string> = {};
+  const storage = {
+    put: vi.fn(async () => `attachments/${randomUUID()}`),
+    remove: vi.fn(async () => undefined),
+    signDownload: vi.fn(async () => 'http://127.0.0.1:9000/signed-private-url'),
+  };
   const base = '/api/v1/leave-requests';
   const valid = {
     studentId: ids.student,
@@ -45,7 +51,10 @@ describe('leave workflow (real PostgreSQL + HTTP)', () => {
     vi.stubEnv('JWT_SECRET', randomBytes(32).toString('hex'));
     const module = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(MinioStorageService)
+      .useValue(storage)
+      .compile();
     app = module.createNestApplication();
     app.setGlobalPrefix('api/v1');
     await app.init();
@@ -106,8 +115,26 @@ describe('leave workflow (real PostgreSQL + HTTP)', () => {
       .auth(tokens[actor], { type: 'bearer' })
       .send(body);
   const pending = async () => (await create().expect(201)).body.id as string;
+  const upload = (
+    id: string,
+    actor = ids.parent,
+    bytes = Buffer.from('%PDF-1.7\n'),
+  ) =>
+    request(app.getHttpServer())
+      .post(`${base}/${id}/attachment`)
+      .auth(tokens[actor], { type: 'bearer' })
+      .attach('file', bytes, {
+        filename: 'bukti-fiktif.pdf',
+        contentType: 'application/pdf',
+      });
 
   beforeEach(async () => {
+    storage.put.mockClear();
+    storage.remove.mockClear();
+    storage.signDownload.mockClear();
+    await prisma.attachment.deleteMany({
+      where: { leaveRequest: { studentId: { in: students } } },
+    });
     await prisma.leaveRequest.deleteMany({
       where: { studentId: { in: students } },
     });
@@ -117,6 +144,9 @@ describe('leave workflow (real PostgreSQL + HTTP)', () => {
     try {
       if (prisma)
         await prisma.$transaction(async (tx) => {
+          await tx.attachment.deleteMany({
+            where: { leaveRequest: { studentId: { in: students } } },
+          });
           await tx.leaveRequest.deleteMany({
             where: { studentId: { in: students } },
           });
@@ -231,6 +261,49 @@ describe('leave workflow (real PostgreSQL + HTTP)', () => {
     expect(
       await prisma.leaveRequest.count({ where: { studentId: ids.student } }),
     ).toBe(1);
+  });
+
+  it('stores a private attachment and signs only for the owner or assigned teacher', async () => {
+    const id = await pending();
+    const uploaded = await upload(id).expect(201);
+    expect(uploaded.body).toMatchObject({
+      leaveRequestId: id,
+      fileName: 'bukti-fiktif.pdf',
+      mimeType: 'application/pdf',
+    });
+    expect(uploaded.body.objectKey).toBeUndefined();
+    expect(
+      await prisma.attachment.count({ where: { leaveRequestId: id } }),
+    ).toBe(1);
+
+    await get(`/${id}/attachment-url`, ids.parent)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body.url).toBe('http://127.0.0.1:9000/signed-private-url');
+        expect(body.expiresIn).toBe(300);
+      });
+    await get(`/${id}/attachment-url`, ids.teacher).expect(200);
+    await get(`/${id}/attachment-url`, ids.other).expect(404);
+    await get(`/${id}/attachment-url`, ids.otherTeacher).expect(404);
+    expect(storage.signDownload).toHaveBeenCalledTimes(2);
+    await upload(id).expect(409);
+  });
+
+  it('rejects mismatched signatures and uploads only for a pending owned request', async () => {
+    const id = await pending();
+    await upload(id, ids.parent, Buffer.from('not a PDF')).expect(400);
+    expect(storage.put).not.toHaveBeenCalled();
+    await upload(id, ids.other).expect(404);
+    await upload(id, ids.teacher).expect(403);
+    await decide(id).expect(200);
+    await upload(id).expect(409);
+  });
+
+  it('rejects an attachment larger than five megabytes', async () => {
+    const id = await pending();
+    const tooLarge = Buffer.alloc(5 * 1024 * 1024 + 1, 0x41);
+    await upload(id, ids.parent, tooLarge).expect(413);
+    expect(storage.put).not.toHaveBeenCalled();
   });
 
   it('filters lists and details by parent and assigned class, ignoring forged query filters', async () => {

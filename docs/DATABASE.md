@@ -9,7 +9,7 @@ Use PostgreSQL and Prisma; document the pinned Prisma version and adapter/config
 - LeaveRequest: `id UUID PK`, `studentId FK Student`, `submittedById FK User`, `absenceDate DATE`, `type(SICK|PERMISSION)`, `reason`, `status(PENDING|APPROVED|REJECTED)`, `reviewedById FK User NULL`, `decisionReason NULL`, `reviewedAt NULL`, `createdAt`. UNIQUE(studentId,absenceDate).
 
 ## P1 models
-- Attachment: `id UUID PK`, `leaveRequestId FK LeaveRequest UNIQUE`, `objectKey UNIQUE`, `fileName`, `mimeType`, `fileSize`. One attachment max per request. Object bytes live in private MinIO, not PostgreSQL.
+- Attachment: `id UUID PK`, `leaveRequestId FK LeaveRequest UNIQUE`, `objectKey UNIQUE`, `fileName`, `mimeType`, `fileSize`. One attachment max per request. Object bytes live in private MinIO, not PostgreSQL. Implemented in Phase 05.
 - Notification: `id UUID PK`, `userId FK User`, `leaveRequestId FK LeaveRequest`, `type(LEAVE_DECIDED)`, `message`, `readAt NULL`, `createdAt`. UNIQUE(userId,leaveRequestId,type) for idempotent insert.
 
 ## Indexes to consider

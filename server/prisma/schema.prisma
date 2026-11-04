@@ -77,7 +77,18 @@ model LeaveRequest {
   student        Student     @relation(fields: [studentId], references: [id], onDelete: Restrict)
   submittedBy    User        @relation("SubmittedLeaves", fields: [submittedById], references: [id], onDelete: Restrict)
   reviewedBy     User?       @relation("ReviewedLeaves", fields: [reviewedById], references: [id], onDelete: Restrict)
+  attachment     Attachment?
 
   @@unique([studentId, absenceDate])
   @@index([status, createdAt])
+}
+
+model Attachment {
+  id             String       @id @default(uuid()) @db.Uuid
+  leaveRequestId String       @unique @db.Uuid
+  objectKey      String       @unique
+  fileName       String
+  mimeType       String
+  fileSize       Int
+  leaveRequest   LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Restrict)
 }

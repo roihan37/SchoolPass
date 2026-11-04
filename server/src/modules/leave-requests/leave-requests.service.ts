@@ -4,13 +4,17 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, type LeaveRequest } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infrastructure/database/prisma.service.js';
+import { MinioStorageService } from '../../infrastructure/storage/minio-storage.service.js';
 import type { CurrentIdentity } from '../../common/auth/auth.identity.js';
 import type { CreateLeaveRequestDto } from './dto/create-leave-request.dto.js';
 import type { DecideLeaveRequestDto } from './dto/decide-leave-request.dto.js';
+import type { Express } from 'express';
+import { basename, win32 } from 'node:path';
 
 const response = (leave: LeaveRequest) => ({
   ...leave,
@@ -19,7 +23,12 @@ const response = (leave: LeaveRequest) => ({
 
 @Injectable()
 export class LeaveRequestsService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(LeaveRequestsService.name);
+
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(MinioStorageService) private readonly storage: MinioStorageService,
+  ) {}
 
   private visibility(user: CurrentIdentity): Prisma.LeaveRequestWhereInput {
     if (user.role === 'PARENT') {
@@ -110,5 +119,115 @@ export class LeaveRequestsService {
         await tx.leaveRequest.findUniqueOrThrow({ where: { id } }),
       );
     });
+  }
+
+  async addAttachment(
+    user: CurrentIdentity,
+    id: string,
+    file: Express.Multer.File,
+  ) {
+    if (user.role !== 'PARENT') throw new ForbiddenException();
+    if (!file) throw new BadRequestException('File is required');
+    this.validateAttachment(file);
+
+    const leave = await this.prisma.leaveRequest.findFirst({
+      where: { id, ...this.visibility(user) },
+      select: { id: true, status: true, attachment: { select: { id: true } } },
+    });
+    if (!leave) throw new NotFoundException('Leave request not found');
+    if (leave.status !== 'PENDING')
+      throw new ConflictException(
+        'Attachments can only be added while pending',
+      );
+    if (leave.attachment)
+      throw new ConflictException('An attachment already exists');
+
+    const objectKey = await this.storage.put({
+      buffer: file.buffer,
+      mimeType: file.mimetype,
+    });
+    try {
+      const fileName = this.safeFileName(file.originalname);
+      return await this.prisma.attachment.create({
+        data: {
+          leaveRequestId: leave.id,
+          objectKey,
+          fileName,
+          mimeType: file.mimetype,
+          fileSize: file.size,
+        },
+        select: {
+          id: true,
+          leaveRequestId: true,
+          fileName: true,
+          mimeType: true,
+          fileSize: true,
+        },
+      });
+    } catch (error) {
+      try {
+        await this.storage.remove(objectKey);
+      } catch {
+        this.logger.warn('Could not clean up an object after metadata failure');
+      }
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      )
+        throw new ConflictException('An attachment already exists');
+      throw error;
+    }
+  }
+
+  async attachmentUrl(user: CurrentIdentity, id: string) {
+    const leave = await this.prisma.leaveRequest.findFirst({
+      where: { id, ...this.visibility(user) },
+      select: {
+        attachment: {
+          select: {
+            id: true,
+            objectKey: true,
+            fileName: true,
+            mimeType: true,
+            fileSize: true,
+          },
+        },
+      },
+    });
+    if (!leave?.attachment) throw new NotFoundException('Attachment not found');
+    const url = await this.storage.signDownload(leave.attachment.objectKey);
+    const { objectKey: _, ...metadata } = leave.attachment;
+    return { ...metadata, url, expiresIn: 300 };
+  }
+
+  private validateAttachment(file: Express.Multer.File) {
+    const bytes = file.buffer;
+    const signatures: Record<string, (value: Buffer) => boolean> = {
+      'application/pdf': (value) => value.subarray(0, 5).toString() === '%PDF-',
+      'image/jpeg': (value) =>
+        value.length >= 3 &&
+        value[0] === 0xff &&
+        value[1] === 0xd8 &&
+        value[2] === 0xff,
+      'image/png': (value) =>
+        value.length >= 8 &&
+        value
+          .subarray(0, 8)
+          .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
+    };
+    if (!signatures[file.mimetype]?.(bytes))
+      throw new BadRequestException(
+        'Only matching PDF, JPEG, or PNG files are supported',
+      );
+  }
+
+  private safeFileName(value: string) {
+    const sanitized = Array.from(win32.basename(value))
+      .filter((character) => {
+        const codePoint = character.codePointAt(0) ?? 0;
+        return codePoint >= 0x20 && codePoint !== 0x7f;
+      })
+      .join('');
+    return basename(sanitized).trim().slice(0, 255) || 'attachment';
   }
 }
