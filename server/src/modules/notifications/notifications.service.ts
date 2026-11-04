@@ -15,8 +15,8 @@ export class NotificationsService {
     await this.queue.enqueue(data);
   }
 
-  list(userId: string) {
-    return this.prisma.notification.findMany({
+  async list(userId: string) {
+    const notifications = await this.prisma.notification.findMany({
       where: { userId },
       select: {
         id: true,
@@ -25,8 +25,20 @@ export class NotificationsService {
         message: true,
         readAt: true,
         createdAt: true,
+        leaveRequest: {
+          select: {
+            type: true,
+            student: { select: { name: true } },
+          },
+        },
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
     });
+
+    return notifications.map(({ leaveRequest, ...notification }) => ({
+      ...notification,
+      studentName: leaveRequest.student.name,
+      leaveType: leaveRequest.type,
+    }));
   }
 }

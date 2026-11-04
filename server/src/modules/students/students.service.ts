@@ -19,4 +19,18 @@ export class StudentsService {
       orderBy: { id: 'asc' },
     });
   }
+
+  assigned(user: CurrentIdentity) {
+    if (user.role !== 'TEACHER') throw new ForbiddenException();
+    return this.prisma.student.findMany({
+      where: { schoolClass: { teacherId: user.id } },
+      select: {
+        id: true,
+        name: true,
+        classId: true,
+        schoolClass: { select: { id: true, name: true } },
+      },
+      orderBy: { id: 'asc' },
+    });
+  }
 }

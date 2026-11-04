@@ -51,7 +51,7 @@ export function CreateRequest({ students, token, onCreated }: { students: Studen
 
   return <section className="create-card" aria-labelledby="create-title">
     <div className="create-intro"><span className="create-icon" aria-hidden="true">＋</span><div><h3 id="create-title">Ajukan izin baru</h3><p>Isi informasi izin untuk anak Anda.</p></div></div>
-    {students.length === 0 ? <div className="inline-empty">Belum ada data anak pada akun ini. Hubungi administrasi sekolah.</div> : <form className="request-form" onSubmit={submit}>
+    {students.length === 0 ? <div className="inline-empty">Belum ada data anak pada akun ini. Hubungi administrasi sekolah.</div> : <form className="request-form" onSubmit={submit} aria-busy={busy}>
       <div className="form-control"><label htmlFor="student">Nama anak</label><Select id="student" value={selectedStudentId} onChange={event => setStudentId(event.target.value)} required>{students.map(student => <option key={student.id} value={student.id}>{student.name} · {student.schoolClass.name}</option>)}</Select></div>
       <div className="form-control"><label htmlFor="absence-date">Tanggal izin</label><Input id="absence-date" type="date" value={absenceDate} onChange={event => setAbsenceDate(event.target.value)} required /></div>
       <div className="form-control"><label htmlFor="leave-type">Jenis izin</label><Select id="leave-type" value={type} onChange={event => setType(event.target.value as LeaveType)}><option value="SICK">Sakit</option><option value="PERMISSION">Keperluan</option></Select></div>

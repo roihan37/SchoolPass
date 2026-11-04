@@ -3,35 +3,36 @@
 @import "./styles/app.css";
 
 :root {
-  font-family: 'Avenir Next', Avenir, 'Segoe UI', sans-serif;
-  color: #172a3c;
-  background: #f7f9fb;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #183b35;
+  background: #f5f8f7;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-optical-sizing: auto;
   font-weight: 400;
-  --navy: #173b4f;
-  --teal: #117c74;
-  --muted: #788894;
-  --line: #e8edf0;
+  --navy: #183b35;
+  --teal: #167866;
+  --muted: #758780;
+  --line: #e1eae6;
 }
 
 @theme inline {
-  --color-background: #f7f9fb;
-  --color-foreground: #172a3c;
-  --color-primary: #14796f;
+  --color-background: #f5f8f7;
+  --color-foreground: #183b35;
+  --color-primary: #167866;
   --color-primary-foreground: #ffffff;
-  --color-muted: #788894;
-  --color-border: #e8edf0;
-  --radius: 0.625rem;
+  --color-muted: #758780;
+  --color-border: #e1eae6;
+  --radius: 0.75rem;
 }
 
 * { box-sizing: border-box; }
+html { min-width: 320px; min-height: 100%; }
 body { min-width: 320px; min-height: 100vh; margin: 0; }
 button, input, textarea, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .62; }
-::selection { background: #bde8df; color: #173b4f; }
+::selection { background: #cce9dc; color: #183b35; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }

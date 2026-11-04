@@ -484,6 +484,8 @@ describe('leave workflow (real PostgreSQL + HTTP)', () => {
       leaveRequestId: ownRequest,
       type: 'LEAVE_DECIDED',
       message: 'Permintaan izin Anda disetujui.',
+      studentName: 'Siswa Uji Fiktif',
+      leaveType: 'SICK',
     });
     expect(own.body[0]).not.toHaveProperty('userId');
     await request(app.getHttpServer())

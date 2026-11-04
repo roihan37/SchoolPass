@@ -35,9 +35,9 @@ export function Login({ onLogin }: { onLogin: (session: Session) => void }) {
     <section className="login-panel">
       <div className="login-form-wrap"><div className="eyebrow">SELAMAT DATANG</div><h2>Masuk ke akun Anda</h2><p className="muted">Gunakan akun orang tua atau guru yang terdaftar.</p>
         {error && <Notice>{error}</Notice>}
-        <form onSubmit={submit} className="form-stack">
+        <form onSubmit={submit} className="form-stack" aria-busy={busy}>
           <label className="form-label" htmlFor="email">Email</label><Input id="email" type="email" autoComplete="username" value={email} onChange={event => setEmail(event.target.value)} required maxLength={254} placeholder="nama@sekolah.id" />
-          <label className="form-label label-spaced" htmlFor="password">Kata sandi</label><Input id="password" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required maxLength={256} placeholder="Masukkan kata sandi" />
+          <label className="form-label label-spaced" htmlFor="password">Kata sandi</label><Input id="password" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required minLength={8} maxLength={256} placeholder="Masukkan kata sandi" />
           <Button type="submit" disabled={busy} className="submit-button">{busy ? 'Memeriksa…' : 'Masuk'} <span aria-hidden="true">→</span></Button>
         </form>
         <div className="login-help"><span className="help-icon" aria-hidden="true">i</span>Akun demo memakai data fiktif dari seed lokal.</div>

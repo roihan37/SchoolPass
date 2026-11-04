@@ -42,6 +42,22 @@ export interface AttachmentDownload extends AttachmentMetadata {
   expiresIn: number
 }
 
+export interface Notification {
+  id: string
+  leaveRequestId: string
+  type: string
+  message: string
+  studentName: string
+  leaveType: LeaveType
+  readAt: string | null
+  createdAt: string
+}
+
+export interface DashboardSummary {
+  totals: { total: number; pending: number; approved: number; rejected: number }
+  classes: Array<{ classId: string; className: string; total: number; pending: number; approved: number; rejected: number }>
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:3001/api/v1'
 
 export class ApiError extends Error {
@@ -94,7 +110,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
+  me: (token: string) => request<User>('/auth/me', token),
   students: (token: string) => request<Student[]>('/students/mine', token),
+  assignedStudents: (token: string) => request<Student[]>('/students/assigned', token),
+  dashboardSummary: (token: string) => request<DashboardSummary>('/dashboard/summary', token),
+  notifications: (token: string) => request<Notification[]>('/notifications', token),
   leaves: (token: string) => request<LeaveRequest[]>('/leave-requests', token),
   createLeave: (token: string, body: { studentId: string; absenceDate: string; type: LeaveType; reason: string }) =>
     request<LeaveRequest>('/leave-requests', token, { method: 'POST', body: JSON.stringify(body) }),

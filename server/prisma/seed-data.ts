@@ -13,8 +13,8 @@ export const seedIds = {
 } as const;
 
 export async function seedDatabase(prisma: PrismaClient, password: string) {
-  if (password.length < 16)
-    throw new Error('SEED_PASSWORD must contain at least 16 characters.');
+  if (password.length < 8)
+    throw new Error('SEED_PASSWORD must contain at least 8 characters.');
   await prisma.$transaction(async (tx) => {
     const users = [
       {
@@ -37,12 +37,11 @@ export async function seedDatabase(prisma: PrismaClient, password: string) {
       },
     ];
     for (const user of users) {
-      const hash = await hashPassword(password);
-      // Re-running seed preserves existing password hashes; this is not a password reset.
+      const passwordHash = await hashPassword(password);
       await tx.user.upsert({
         where: { id: user.id },
-        create: { ...user, passwordHash: hash },
-        update: user,
+        create: { ...user, passwordHash },
+        update: { ...user, passwordHash },
       });
     }
     for (const schoolClass of [
@@ -73,7 +72,7 @@ export async function seedDatabase(prisma: PrismaClient, password: string) {
       {
         id: seedIds.studentB,
         name: 'Siswa Fiktif B',
-        parentId: seedIds.parentA,
+        parentId: seedIds.parentB,
         classId: seedIds.classB,
       },
       {

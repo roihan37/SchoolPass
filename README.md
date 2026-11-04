@@ -1,6 +1,6 @@
 # SchoolPass
 
-Fondasi Phase 00–06: React + TypeScript + Vite di `client/`, NestJS + TypeScript di
+Fondasi Phase 00–07: React + TypeScript + Vite di `client/`, NestJS + TypeScript di
 `server/`, PostgreSQL, dan MinIO sebagai service Docker Compose. Phase 01
 menambahkan empat model Prisma, migrasi, seed fiktif, dan provider database Nest.
 Phase 02 menambahkan login JWT serta akses anak sesuai role dan kepemilikan.
@@ -8,6 +8,50 @@ Phase 03 menambahkan backend pengajuan izin dan keputusan final guru. Phase 05
 menambahkan lampiran privat MinIO untuk pengajuan yang masih PENDING. Phase 06
 menambahkan antrean notifikasi BullMQ/Redis dengan worker terpisah, notifikasi
 dalam aplikasi, dan ringkasan dashboard guru dengan cache 60 detik.
+
+## Mulai cepat
+
+Perlu Node.js `24.18.1`, npm `11.16.0`, dan Docker Compose. Jalankan dari root
+repositori. Jika memakai nvm, pilih versi Node yang tercantum di `.nvmrc`.
+Salin template env hanya saat setup pertama:
+
+```sh
+nvm use
+test -f .env || cp .env.example .env
+```
+
+Isi nilai kosong pada `.env`: `POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD`,
+`SEED_PASSWORD` (minimal 8 karakter), dan `JWT_SECRET` (minimal 32 karakter).
+Untuk tiap nilai, jalankan `openssl rand -hex 32` dan salin hasil uniknya ke
+`.env`. Jangan commit `.env`. Pasang dependency dan jalankan layanan (pastikan
+Docker Desktop/daemon aktif):
+
+```sh
+(cd client && npm ci)
+(cd server && npm ci)
+docker compose up -d --build --wait
+```
+
+Jalankan tiga perintah berikut di **terminal terpisah**, masing-masing dari
+root repositori:
+
+```sh
+cd server && npm run prisma:deploy && npm run prisma:seed && PORT=3001 npm run start:dev
+```
+
+```sh
+cd server && npm run worker:dev
+```
+
+```sh
+cd client && npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
+```
+
+Buka <http://127.0.0.1:5173>. API: <http://127.0.0.1:3001/api/v1>;
+health check: <http://127.0.0.1:3001/api/v1/health>. Akun demo dan cara
+menghentikan layanan ada di bagian [QA dan demo](#qa-dan-demo-phase-07).
+Untuk detail setup, troubleshooting, dan verifikasi, lihat
+[Menjalankan lokal](#menjalankan-lokal).
 
 ## Struktur backend
 
@@ -142,11 +186,12 @@ Kedua aplikasi hanya bind ke loopback. Compose dan konfigurasi database membaca
 memiliki prioritas. Jalankan perintah npm server dari `server/`.
 
 URL database dibentuk dari variabel `POSTGRES_*` dengan encoding kredensial yang
-sesuai. `DATABASE_URL` dapat menggantikannya. `SEED_PASSWORD` wajib minimal 16
+sesuai. `DATABASE_URL` dapat menggantikannya. `SEED_PASSWORD` wajib minimal 8
 karakter: isi nilai lokal bila masih kosong. Seed menyimpan hash scrypt dengan
 salt acak per pengguna; password tidak dicetak. Seed transaksional membuat
-1 guru, 2 orang tua, 2 kelas, 3 siswa fiktif, tanpa leave request. Pengulangan
-seed memakai ID tetap dan mempertahankan hash password yang sudah tersimpan.
+1 guru, 2 orang tua, 2 kelas, 3 siswa fiktif, tanpa leave request. Seed ulang
+memperbarui hash akun demo agar memakai nilai `SEED_PASSWORD` terkini, tanpa
+menghapus pengajuan izin atau data lain.
 
 `prisma:deploy` menerapkan migrasi yang sudah tersedia pada checkout baru.
 Untuk perubahan schema dalam development, jalankan dari `server/`:
@@ -284,8 +329,8 @@ PORT=3001 npm run start:dev
 ```
 
 Seed memakai email `parent.a@example.test`, `parent.b@example.test`, dan
-`teacher@example.test`. Password adalah nilai `SEED_PASSWORD` pada seed pertama;
-seed ulang mempertahankan hash lama, sehingga mengganti `.env` tidak mereset password.
+`teacher@example.test`. Password semua akun demo adalah nilai `SEED_PASSWORD`
+terkini; jalankan ulang `npm run prisma:seed` setelah mengubah nilai tersebut.
 Tidak ada registrasi publik. Login mengembalikan `accessToken`, `tokenType: Bearer`,
 `expiresIn: 900` detik dan `user` tanpa hash. Login memakai email persis seperti seed.
 
@@ -440,9 +485,9 @@ compose full-stack. Untuk setup dari checkout baru, ikuti bagian
 
 Akun demo semuanya fiktif. Email login: `parent.a@example.test`,
 `parent.b@example.test`, dan `teacher@example.test`; password ketiganya adalah
-nilai lokal `SEED_PASSWORD` yang dipakai pada seed pertama. Seed ulang tidak
-mengganti password akun yang sudah ada. Jangan gunakan password demo atau file
-`.env` pada lingkungan publik.
+nilai `SEED_PASSWORD` saat seed terakhir dijalankan. Setelah mengubah password
+itu di `.env`, jalankan ulang `npm run prisma:seed`. Jangan gunakan password demo
+atau file `.env` pada lingkungan publik.
 
 Setelah API hidup dan seed siap, jalankan dari `server/`:
 

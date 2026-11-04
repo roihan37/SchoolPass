@@ -14,4 +14,10 @@ export class StudentsController {
   mine(@CurrentUser() user: CurrentIdentity) {
     return this.students.mine(user);
   }
+
+  @Roles('TEACHER')
+  @Get('assigned')
+  assigned(@CurrentUser() user: CurrentIdentity) {
+    return this.students.assigned(user);
+  }
 }

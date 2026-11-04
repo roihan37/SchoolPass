@@ -8,6 +8,7 @@ Prefix: `/api/v1`. Require JWT except login and public liveness `/health`. Phase
 | POST | /auth/login | Public | Authenticate email/password, issue JWT |
 | GET | /auth/me | Auth | Identity and role |
 | GET | /students/mine | Parent | Own children only |
+| GET | /students/assigned | Teacher | Students in own assigned classes |
 | POST | /leave-requests | Parent | One-day request, status=PENDING |
 | GET | /leave-requests | Parent/Teacher | Filter by ownership/class |
 | GET | /leave-requests/:id | Parent/Teacher | Authorized detail |
@@ -16,7 +17,6 @@ Prefix: `/api/v1`. Require JWT except login and public liveness `/health`. Phase
 | GET | /leave-requests/:id/attachment-url | Parent/Teacher | Authorized signed download |
 | GET | /dashboard/summary | Teacher | Own class counts, Redis cache TTL 60 sec |
 | GET | /notifications | Auth | Own in-app notifications |
-| PATCH | /notifications/:id/read | Auth | Mark own notification read (P1) |
 
 Expected errors: validation 400; authentication 401; forbidden 403; not found 404; duplicate/decided 409. Be consistent and document deliberate decisions to avoid revealing existence of unauthorized data.
 
@@ -26,7 +26,7 @@ Example decision: PATCH /leave-requests/:id/decision JSON `{ "status": "REJECTED
 ## Phase 02 — implemented authentication contract
 
 - `POST /auth/login`: JSON `{ "email": "parent.a@example.test", "password": "<local seeded password>" }`.
-  Email valid, maksimal 254 karakter; password string 1–256 karakter; field tambahan
+  Email valid, maksimal 254 karakter; password string 8–256 karakter; field tambahan
   ditolak 400. Email dicocokkan persis dengan email yang tersimpan, tanpa normalisasi.
   Berhasil 200: `{ "accessToken": "<JWT>", "tokenType": "Bearer", "expiresIn": 900,
   "user": { "id": "<uuid>", "name": "<fictional name>", "email": "<email>", "role": "PARENT" } }`.
@@ -36,6 +36,9 @@ Example decision: PATCH /leave-requests/:id/decision JSON `{ "status": "REJECTED
 - `GET /students/mine`: Parent saja; 200 array `{ id, name, classId, schoolClass: { id, name } }`,
   urutan `id` ascending; tanpa anak => `[]`. Filter `parentId` selalu dari identitas
   terverifikasi server. Query parameter tidak dapat mengganti pemilik data. Teacher => 403.
+- `GET /students/assigned`: Teacher saja; bentuk respons sama dengan `/students/mine`,
+  tetapi hanya memuat siswa dari kelas yang ditugaskan kepada guru terautentikasi.
+  Parent => 403.
 - Semua route yang diimplementasikan dilindungi guard secara default kecuali health/login.
   JWT diperiksa signature HS256, expiry wajib, issuer `schoolpass`, audience
   `schoolpass-api`, dan UUID subject. Masa berlaku 900 detik. Role terbaru dibaca dari
@@ -87,9 +90,10 @@ untuk updateMany dan P2002, serta
 
 - `GET /notifications`: Parent/Teacher dengan JWT; hanya baris milik user dari
   identitas terverifikasi, terbaru dahulu. Respons berupa array objek
-  `{ id, leaveRequestId, type, message, readAt, createdAt }`; `userId` tidak
-  diekspos. Read status tersedia di data tetapi belum ada endpoint untuk
-  menandai sudah dibaca.
+  `{ id, leaveRequestId, type, message, studentName, leaveType, readAt,
+  createdAt }`; nama siswa dan jenis izin diambil dari permintaan terkait,
+  sedangkan `userId` tidak diekspos. Read status tersedia di data tetapi belum
+  ada endpoint untuk menandai sudah dibaca.
 - Keputusan izin yang sudah tersimpan mengirim job `leave.decided` ke BullMQ.
   Worker menulis notifikasi ke PostgreSQL; retry maksimal 5 percobaan dengan
   exponential backoff awal 1 detik. Unique `(userId, leaveRequestId, type)` dan

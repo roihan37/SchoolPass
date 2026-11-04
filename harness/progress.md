@@ -711,3 +711,98 @@ pekerjaan berikutnya setelah persetujuan task baru.
   pendukung dan proses aplikasi lokal, bukan full-stack Compose atau checkout
   mesin baru. Tidak ada browser automation/beban. Test e2e perlu akses loopback
   untuk Redis di sandbox ini. Tidak ada dependency baru atau commit.
+
+## Frontend/backend integration follow-up — 2026-11-04
+- Menambahkan `GET /students/assigned` untuk Teacher. Filter kelas menggunakan
+  `teacherId` dari identitas JWT yang diverifikasi server; field respons terbatas
+  pada identitas siswa dan kelas. FE Teacher kini memetakan `studentId` dari
+  pengajuan ke nama siswa yang benar.
+- FE memanggil `GET /dashboard/summary` untuk statistik Teacher dan
+  `GET /notifications` untuk Parent. Ringkasan tetap memakai data daftar izin
+  sebagai fallback jika ringkasan tidak tersedia. Panel notifikasi menampilkan
+  item dan status kosong; mark-as-read tetap belum ada sesuai implementasi API.
+- Token login disimpan di `sessionStorage` untuk bertahan saat reload dalam tab
+  yang sama, lalu diverifikasi ulang lewat `GET /auth/me`. Logout atau token
+  yang ditolak server menghapus token. Tidak ada refresh token.
+- Memperbarui `docs/API.md` agar mendokumentasikan route Teacher dan tidak lagi
+  mencantumkan route mark-as-read yang belum diimplementasikan.
+- Verifikasi aktual: client lint PASS tanpa warning; client build PASS;
+  server lint PASS tanpa warning/error; server unit PASS (4 file, 13 test);
+  server e2e PASS (1 file, 6 test); server database PASS (4 file, 82 test);
+  server build PASS; `git diff --check` PASS. Percobaan pertama test DB
+  mengalami `ENOENT` saat Prisma Client sedang dibuat bersamaan oleh build;
+  pengulangan setelah generate selesai PASS.
+- Tidak tersedia test runner FE atau browser automation, sehingga tampilan
+  interaktif belum diuji otomatis di browser. Notifikasi saat ini hanya dibaca,
+  belum dapat ditandai telah dibaca. Token `sessionStorage` dibatasi ke tab dan
+  hilang ketika tab ditutup; autentikasi cookie/refresh tidak termasuk fase ini.
+- Tidak ada dependency baru atau commit.
+
+## Kebijakan password dan reset akun seed — 2026-11-04
+- Batas password pada login API, form FE, dan `SEED_PASSWORD` kini minimal
+  8 karakter (maksimum login tetap 256). Nilai kurang dari 8 ditolak sebelum
+  seed mengubah database.
+- Seed ulang memperbarui hash untuk tiga akun demo mengikuti `.env` terkini.
+  Hash tetap memakai salt scrypt acak per akun; seed tidak menghapus pengajuan
+  atau record lain. README dan kontrak API diperbarui agar mencerminkan perilaku.
+- Verifikasi aktual: client lint PASS; server lint PASS tanpa warning/error;
+  server unit test PASS (4 file, 13 test); server database test PASS (4 file,
+  84 test); client build PASS; server build PASS. `git diff --check` PASS.
+- Seed ulang: percobaan sandbox awal terhalang `EPERM` saat mengakses
+  PostgreSQL lokal; setelah izin akses disetujui, `npm run prisma:seed` PASS
+  (`1 teacher, 2 parents, 2 classes, 3 students`). Seed memakai nilai
+  `SEED_PASSWORD` terkini dari `.env`, tanpa menampilkan kredensial di log.
+
+## Frontend UI/UX refinement — 2026-11-04
+- Merapikan stylesheet utama menjadi sistem token warna, tipografi, jarak,
+  radius, border, dan bayangan yang konsisten; menata ulang dashboard, formulir,
+  tabel, badge, panel detail, notifikasi, serta halaman login.
+- Menambahkan layout adaptif untuk desktop, tablet, dan ponsel; tabel tetap dapat
+  digulir pada layar sempit. Fokus keyboard terlihat dan animasi mengikuti
+  preferensi `prefers-reduced-motion`.
+- Menambahkan status memuat, gagal, dan kosong yang dapat dibaca teknologi bantu
+  pada daftar/notifikasi; form login dan pengajuan mengumumkan status sibuk.
+  Navigasi dashboard diberi label semantik dan indikator halaman aktif.
+- Verifikasi aktual: `client/npm run lint` PASS; `client/npm run build` PASS
+  (TypeScript dan Vite); `git diff --check` PASS. Client belum memiliki test
+  runner atau otomasi browser, jadi interaksi visual belum dites otomatis.
+- Tidak ada dependency baru atau perubahan API. Perubahan UI sebelumnya pada
+  working tree tetap dipertahankan; tidak ada commit dibuat.
+
+## Follow-up navbar, relasi parent-anak, dan verifikasi queue — 2026-11-04
+- Perbaiki seed fiktif: Siswa A milik Parent A; Siswa B dan C milik Parent B.
+  Test relasi Prisma diperbarui. Seed lokal dijalankan ulang; hasilnya 1 teacher,
+  2 parents, 2 classes, dan 3 students. Seperti perilaku seed saat ini, hash
+  password akun demo mengikuti `SEED_PASSWORD` di `.env`.
+- Parent hanya menerima siswa dengan `parentId` yang berasal dari identitas
+  token (`StudentsService.mine`); endpoint pengajuan mencocokkan juga ID siswa
+  dengan parent tersebut. Akar masalah tampilan sebelumnya adalah data seed
+  yang memasangkan Siswa B ke Parent A, bukan bypass otorisasi.
+- Navbar yang semula disembunyikan pada lebar layar ponsel kini ditampilkan
+  sebagai baris navigasi penuh. Font diganti ke system UI yang tersedia lintas
+  platform, tanpa menambah dependency font.
+- Pemeriksaan layanan: `docker compose ps` menunjukkan PostgreSQL dan Redis
+  `healthy`; Redis memakai port lokal 56379. `GET /api/v1/health` merespons
+  HTTP 200. Test DB mencakup antrean dan worker BullMQ dengan retry; 84 test
+  lulus, termasuk worker menyelesaikan job setelah dua kegagalan sementara.
+- Verifikasi: client lint/build PASS; server lint/unit/build PASS; server
+  `npm run test:db` PASS (4 file, 84 test); seed lokal PASS; health PASS;
+  `git diff --check` PASS. `ps` tidak dapat dijalankan dari sandbox, sehingga
+  status worker dev yang persisten di luar test belum diverifikasi. Tidak ada
+  dependency baru atau commit.
+
+## Metadata siswa pada notifikasi — 2026-11-04
+- `GET /notifications` menyertakan nama siswa dan jenis izin dari relasi leave
+  request; tidak ada perubahan skema database dan `userId` tetap tidak diekspos.
+- Dropdown notifikasi menampilkan nama siswa serta jenis izin dalam label
+  Indonesia. Kontrak API dan test integrasi diperbarui.
+- Verifikasi: client lint/build PASS; server lint PASS, `npm run test:db` PASS
+  (4 file, 84 test), server build PASS; `git diff --check` PASS.
+
+## Panduan mulai cepat README — 2026-11-04
+- Ringkas bagian mulai cepat dengan prasyarat runtime, pembuatan `.env`,
+  instalasi dependency, startup layanan Docker, migrasi/seed, dan perintah untuk
+  menjalankan API, worker, serta frontend di terminal terpisah.
+- Verifikasi: tinjau perintah terhadap `.nvmrc`, `.env.example`, `compose.yaml`,
+  dan script npm; `git diff --check` PASS. Tidak menjalankan test karena hanya
+  dokumentasi.

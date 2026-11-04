@@ -4,6 +4,7 @@ import { PrismaModule } from '../src/infrastructure/database/prisma.module.js';
 import { PrismaService } from '../src/infrastructure/database/prisma.service.js';
 import { testDatabaseUrl } from '../src/infrastructure/database/database-env.js';
 import { seedDatabase, seedIds } from '../prisma/seed-data.js';
+import { verifyPassword } from '../src/common/security/password.js';
 
 describe('PostgreSQL foundation (real database)', () => {
   let module: TestingModule;
@@ -83,15 +84,15 @@ describe('PostgreSQL foundation (real database)', () => {
         teacherName: s.schoolClass.teacher.name,
       })),
     ).toEqual(rows);
-    expect(students.map((s) => s.id)).toEqual([
-      seedIds.studentA,
-      seedIds.studentB,
-    ]);
+    expect(students.map((s) => s.id)).toEqual([seedIds.studentA]);
     const otherParent = await prisma.student.findMany({
       where: { parentId: seedIds.parentB },
       select: { id: true },
     });
-    expect(otherParent).toEqual([{ id: seedIds.studentC }]);
+    expect(otherParent.map((student) => student.id)).toEqual([
+      seedIds.studentB,
+      seedIds.studentC,
+    ]);
     expect(
       await prisma.student.count({ where: { parentId: randomUUID() } }),
     ).toBe(0);
@@ -220,10 +221,20 @@ describe('PostgreSQL foundation (real database)', () => {
     ).rejects.toMatchObject({ code: 'P2003' });
   });
 
-  it('rejects short seed passwords before changing records', async () => {
-    await expect(seedDatabase(prisma, '')).rejects.toThrow(
-      'SEED_PASSWORD must contain at least 16 characters.',
+  it('requires at least eight seed password characters before changing records', async () => {
+    await expect(seedDatabase(prisma, '1234567')).rejects.toThrow(
+      'SEED_PASSWORD must contain at least 8 characters.',
     );
     expect(await prisma.user.count()).toBe(3);
+  });
+
+  it('accepts an eight-character seed password and applies it when reseeding', async () => {
+    const password = 'demo1234';
+    await seedDatabase(prisma, password);
+    const teacher = await prisma.user.findUniqueOrThrow({
+      where: { id: seedIds.teacher },
+      select: { passwordHash: true },
+    });
+    expect(await verifyPassword(password, teacher.passwordHash)).toBe(true);
   });
 });
