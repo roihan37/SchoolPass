@@ -680,3 +680,34 @@ Next: tunggu review manusia dan persetujuan eksplisit sebelum Phase 01.
 
 Next: review Phase 06; transactional outbox dan mark-as-read dapat menjadi
 pekerjaan berikutnya setelah persetujuan task baru.
+
+## Phase 07 — Integration QA and demo — 2026-11-04
+- Menambahkan test PostgreSQL + HTTP untuk satu alur Parent membuat pengajuan,
+  Teacher melihat dan menyetujui, Parent membaca status final, serta Parent
+  lain menerima 404. Test ini melengkapi kasus otorisasi negatif lain yang sudah
+  ada di suite database.
+- Menambahkan `server/scripts/qa-smoke.mjs` dan `npm run smoke` tanpa dependency
+  tambahan. Smoke test memakai akun seed fiktif, memverifikasi alur melalui API
+  hidup, lalu mencatat bahwa satu pengajuan fiktif dibuat di database lokal.
+- README kini mendokumentasikan workflow hybrid, akun demo dan keterbatasan
+  seed password, perintah smoke, outline demo lima menit, serta batasan proyek.
+  ADR 0001 mencatat alasan workflow hybrid, trade-off operasional, readiness vs
+  liveness, dan proses triage.
+- Verifikasi aktual:
+  - `client/npm run lint`: PASS; `client/npm run build`: PASS (TypeScript dan
+    Vite, 29 modul).
+  - `server/npm run lint`: PASS, 0 warning dan 0 error.
+  - `server/npm test`: PASS, 4 file dan 13 test.
+  - `server/npm run test:e2e`: awalnya diblokir sandbox (`connect EPERM` ke
+    Redis loopback); dijalankan ulang dengan izin akses lokal dan PASS, 1 file
+    dan 6 test.
+  - `server/npm run test:db`: PASS, 4 file dan 81 test; tiga migrasi sudah
+    diterapkan pada database test.
+  - `server/npm run build`: PASS (Prisma Client dan Nest build).
+  - API lokal dijalankan di port 3001; `server/npm run smoke`: PASS. Parent A
+    mengajukan, Teacher menyetujui, Parent A membaca APPROVED, dan Parent B
+    menerima 404. Smoke menambahkan satu pengajuan fiktif ke DB demo lokal.
+- Keterbatasan verifikasi: workflow yang diuji adalah Docker untuk layanan
+  pendukung dan proses aplikasi lokal, bukan full-stack Compose atau checkout
+  mesin baru. Tidak ada browser automation/beban. Test e2e perlu akses loopback
+  untuk Redis di sandbox ini. Tidak ada dependency baru atau commit.

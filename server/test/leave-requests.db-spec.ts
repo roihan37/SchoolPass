@@ -360,6 +360,27 @@ describe('leave workflow (real PostgreSQL + HTTP)', () => {
     await decide('invalid-id').expect(400);
   });
 
+  it('completes the Parent → Teacher → Parent demo flow with ownership checks', async () => {
+    const created = await create().expect(201);
+    const id = created.body.id as string;
+
+    await get(`/${id}`, ids.parent).expect(200).expect(({ body }) => {
+      expect(body.status).toBe('PENDING');
+    });
+    await get(`/${id}`, ids.teacher).expect(200);
+    await get(`/${id}`, ids.other).expect(404);
+
+    await decide(id, { status: 'APPROVED' }, ids.teacher).expect(200);
+    await get(`/${id}`, ids.parent).expect(200).expect(({ body }) => {
+      expect(body).toMatchObject({
+        id,
+        status: 'APPROVED',
+        submittedById: ids.parent,
+        reviewedById: ids.teacher,
+      });
+    });
+  });
+
   it.each([
     {},
     { status: 'PENDING' },

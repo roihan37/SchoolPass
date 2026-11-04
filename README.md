@@ -427,6 +427,59 @@ gagal sesudah keputusan tersimpan, notifikasi dapat tertunda/hilang sampai ada
 mekanisme pemulihan. Transactional outbox adalah opsi untuk memperkuat jaminan
 delivery di fase lanjutan.
 
+## QA dan demo — Phase 07
+
+Compose sengaja menjalankan layanan pendukung (PostgreSQL, MinIO, Redis),
+sementara Vite, API, dan worker dijalankan sebagai proses Node lokal. Ini adalah
+workflow hybrid yang terdokumentasi dan diuji pada environment proyek; bukan
+compose full-stack. Untuk setup dari checkout baru, ikuti bagian
+[Menjalankan lokal](#menjalankan-lokal), lalu jalankan gate di bagian
+[Verifikasi](#verifikasi). Migrasi memakai `npm run prisma:deploy`, seed memakai
+`npm run prisma:seed`, dan worker dijalankan di terminal tersendiri dengan
+`npm run worker:dev`.
+
+Akun demo semuanya fiktif. Email login: `parent.a@example.test`,
+`parent.b@example.test`, dan `teacher@example.test`; password ketiganya adalah
+nilai lokal `SEED_PASSWORD` yang dipakai pada seed pertama. Seed ulang tidak
+mengganti password akun yang sudah ada. Jangan gunakan password demo atau file
+`.env` pada lingkungan publik.
+
+Setelah API hidup dan seed siap, jalankan dari `server/`:
+
+```sh
+npm run smoke
+```
+
+Smoke test memakai akun seed Parent A, Parent B, dan Teacher. Ia membuat satu
+pengajuan fiktif pada tanggal acak di database lokal, memeriksa status PENDING,
+keputusan guru, status APPROVED yang dibaca Parent, dan 404 bagi Parent lain.
+Setiap eksekusi membuat satu baris leave request tambahan; jalankan hanya pada
+database demo lokal.
+
+### Outline demo teknis lima menit
+
+1. **0:00–0:45 — Tujuan dan arsitektur.** Tunjukkan React → REST API NestJS →
+   service → Prisma/PostgreSQL; MinIO menyimpan bytes privat, Redis membawa job
+   BullMQ, dan worker berjalan sebagai proses berbeda.
+2. **0:45–1:45 — Parent.** Login sebagai Parent A, tunjukkan anak miliknya,
+   buat pengajuan dan jelaskan bahwa server menetapkan pemilik serta status
+   PENDING.
+3. **1:45–2:45 — Teacher.** Login sebagai guru, lihat pengajuan kelas yang
+   ditugaskan, setujui/tolak, lalu tunjukkan status final kembali di Parent.
+4. **2:45–3:45 — Keamanan dan data.** Jelaskan JWT, pemeriksaan kepemilikan/
+   kelas di service, FK dan unique student/date, serta file privat dengan URL
+   bertanda tangan. Sebutkan kasus negatif dan konkurensi dalam `npm run test:db`.
+5. **3:45–5:00 — Reliability dan SDLC.** Tunjukkan job/retry/idempotensi,
+   invalidasi cache 60 detik, lint/test/build gates, batas liveness vs readiness,
+   dan keterbatasan delivery non-atomik PostgreSQL/Redis. Jelaskan bug triage:
+   reproduce, klasifikasikan setup/regression/flaky, perbaiki, lalu catat hasil.
+
+Keterbatasan yang diketahui: tidak ada test runner browser otomatis atau
+pengujian beban; enqueue notifikasi tidak atomik dengan keputusan database;
+MinIO upstream yang dipakai untuk image demo telah diarsipkan. Proyek ini bukan
+siap produksi dan belum diaudit regulasi/privasi. Rincian trade-off setup ada di
+[ADR demo lokal](docs/decisions/0001-local-demo-delivery.md).
+
 Audit runtime server dan audit client: 0 temuan. Audit penuh server masih keluar
 dengan status gagal: **2 moderate** pada Nest CLI/minimatch
 ([advisory](https://github.com/advisories/GHSA-g3hv-75wg-m249)). Saran otomatis npm
