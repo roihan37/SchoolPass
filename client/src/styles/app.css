@@ -394,3 +394,26 @@ td { height: 59px; font-size: 13px; }
   .form-stack .field { height: 47px; font-size: 14px; }
   .login-footer { padding-top: 34px; }
 }
+
+.optional-label { color: #8b999f; font-weight: 400; }
+.file-field { height: auto; min-height: 44px; padding: 8px 10px; color: #596e77; }
+.file-field::file-selector-button { min-height: 27px; padding: 0 9px; margin-right: 10px; border: 1px solid #dfe7e9; border-radius: 6px; background: #f7faf9; color: #45635d; font: inherit; cursor: pointer; }
+.attachment-box { padding: 14px 0 0; border-top: 1px solid #edf1f2; }
+.attachment-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.attachment-heading h4 { margin: 0 0 3px; color: #405966; font-size: 12px; }
+.attachment-heading p, .attachment-note { margin: 0; color: #87969c; font-size: 10px; line-height: 1.5; }
+.attachment-ready { padding: 4px 7px; border-radius: 20px; background: #eaf6ef; color: #3e8a61; font-size: 9px; font-weight: 700; }
+.attachment-file { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 9px; border: 1px solid #e6eeeb; border-radius: 8px; background: #f8fbf9; }
+.attachment-file-icon { display: grid; flex: 0 0 31px; width: 31px; height: 31px; place-items: center; border-radius: 8px; background: #eaf5f2; color: #16796f; }
+.attachment-file-info { display: grid; flex: 1; min-width: 0; gap: 3px; }
+.attachment-file-info strong { overflow: hidden; color: #405966; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-file-info span { color: #8b999f; font-size: 9px; }
+.attachment-file .button { min-height: 32px; padding-inline: 9px; font-size: 10px; }
+.attachment-box .notice { margin: 10px 0 0; font-size: 10px; }
+.attachment-box .form-control { gap: 7px; }
+.attachment-box .form-control label { color: #74858d; font-size: 9px; }
+@media (max-width: 700px) {
+  .file-field { min-height: 42px; font-size: 11px; }
+  .attachment-box { padding-top: 12px; }
+  .attachment-file { gap: 7px; padding: 8px; }
+}

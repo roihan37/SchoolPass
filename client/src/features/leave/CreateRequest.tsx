@@ -8,8 +8,9 @@ export function CreateRequest({ students, token, onCreated }: { students: Studen
   const [absenceDate, setAbsenceDate] = useState('')
   const [type, setType] = useState<LeaveType>('SICK')
   const [reason, setReason] = useState('')
+  const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
+  const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
 
   const selectedStudentId = studentId || students[0]?.id || ''
@@ -17,14 +18,30 @@ export function CreateRequest({ students, token, onCreated }: { students: Studen
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError('')
-    setSuccess(false)
+    setMessage('')
+    if (file && file.size > 5 * 1024 * 1024) {
+      setError('Ukuran lampiran maksimal 5 MB.')
+      return
+    }
     setBusy(true)
     try {
       const created = await api.createLeave(token, { studentId: selectedStudentId, absenceDate, type, reason: reason.trim() })
+      if (file) {
+        try {
+          await api.uploadAttachment(token, created.id, file)
+          setMessage('Pengajuan dan lampiran berhasil dikirim.')
+        } catch (uploadError) {
+          setMessage(`Pengajuan tersimpan, tetapi lampiran gagal diunggah: ${friendlyError(uploadError)} Pilih pengajuan ini untuk mencoba lagi.`)
+        }
+      } else {
+        setMessage('Pengajuan terkirim dan berstatus menunggu.')
+      }
       onCreated(created)
       setReason('')
       setAbsenceDate('')
-      setSuccess(true)
+      setFile(null)
+      const fileInput = document.getElementById('attachment') as HTMLInputElement | null
+      if (fileInput) fileInput.value = ''
     } catch (reason) {
       setError(friendlyError(reason))
     } finally {
@@ -39,8 +56,9 @@ export function CreateRequest({ students, token, onCreated }: { students: Studen
       <div className="form-control"><label htmlFor="absence-date">Tanggal izin</label><Input id="absence-date" type="date" value={absenceDate} onChange={event => setAbsenceDate(event.target.value)} required /></div>
       <div className="form-control"><label htmlFor="leave-type">Jenis izin</label><Select id="leave-type" value={type} onChange={event => setType(event.target.value as LeaveType)}><option value="SICK">Sakit</option><option value="PERMISSION">Keperluan</option></Select></div>
       <div className="form-control form-control-wide"><label htmlFor="reason">Keterangan</label><Input id="reason" value={reason} onChange={event => setReason(event.target.value)} placeholder="Contoh: demam dan perlu istirahat di rumah" maxLength={2000} required /></div>
+      <div className="form-control form-control-wide"><label htmlFor="attachment">Lampiran <span className="optional-label">(opsional, PDF/JPG/PNG, maks. 5 MB)</span></label><Input id="attachment" className="file-field" type="file" accept="application/pdf,image/jpeg,image/png" onChange={event => { setError(''); setFile(event.target.files?.[0] ?? null) }} /></div>
       <div className="form-submit"><span>{reason.length}/2000 karakter</span><Button type="submit" disabled={busy || students.length === 0}>{busy ? 'Mengirim…' : 'Kirim pengajuan'} <span aria-hidden="true">→</span></Button></div>
-      {error && <div className="form-message form-message-error" role="alert">{error}</div>}{success && <div className="form-message form-message-success" role="status">Pengajuan terkirim dan berstatus menunggu.</div>}
+      {error && <div className="form-message form-message-error" role="alert">{error}</div>}{message && <div className={`form-message ${message.startsWith('Pengajuan tersimpan') ? 'form-message-error' : 'form-message-success'}`} role="status">{message}</div>}
     </form>}
   </section>
 }

@@ -30,6 +30,18 @@ export interface LeaveRequest {
   createdAt: string
 }
 
+export interface AttachmentMetadata {
+  id: string
+  fileName: string
+  mimeType: string
+  fileSize: number
+}
+
+export interface AttachmentDownload extends AttachmentMetadata {
+  url: string
+  expiresIn: number
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:3001/api/v1'
 
 export class ApiError extends Error {
@@ -44,11 +56,12 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, token?: string, init?: RequestInit): Promise<T> {
   let response: Response
+  const isFormData = typeof FormData !== 'undefined' && init?.body instanceof FormData
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...init,
       headers: {
-        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(init?.body && !isFormData ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...init?.headers,
       },
@@ -90,4 +103,11 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ status, ...(decisionReason ? { decisionReason } : {}) }),
     }),
+  uploadAttachment: (token: string, id: string, file: File) => {
+    const body = new FormData()
+    body.append('file', file)
+    return request<AttachmentMetadata>(`/leave-requests/${id}/attachment`, token, { method: 'POST', body })
+  },
+  attachmentUrl: (token: string, id: string) =>
+    request<AttachmentDownload>(`/leave-requests/${id}/attachment-url`, token),
 }

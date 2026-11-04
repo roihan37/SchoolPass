@@ -615,3 +615,28 @@ Next: tunggu review manusia dan persetujuan eksplisit sebelum Phase 01.
   login termuat dan screenshot memperlihatkan panel dan palet baru. Tidak ada
   test runner frontend terpisah. Dashboard berautentikasi belum diverifikasi
   pada iterasi ini.
+
+## Frontend MinIO attachment integration — 2026-11-04
+- Form Parent kini menerima lampiran opsional PDF/JPEG/PNG hingga 5 MiB. FE
+  membuat pengajuan terlebih dahulu lalu mengunggah field multipart bernama
+  `file`; jika upload gagal, pengajuan tetap ditampilkan dan detail menyediakan
+  kontrol untuk mencoba upload lagi tanpa mengirim pengajuan duplikat.
+- Detail permintaan menampilkan nama, MIME type, ukuran berkas dan tombol unduh
+  untuk Parent maupun Teacher yang berhak melihat permintaan. Unduh meminta URL
+  bertanda tangan baru dari API setiap kali agar masa berlaku URL 300 detik
+  tidak menyebabkan tautan lama dipakai ulang.
+- API client sengaja tidak mengatur `Content-Type` untuk `FormData`, sehingga
+  browser menyertakan boundary multipart. Batas akses, tipe bytes dan ukuran
+  tetap divalidasi oleh server; atribut `accept`/cek ukuran FE hanya membantu
+  pengalaman pengguna.
+- File berubah: `client/src/lib/api.ts`,
+  `client/src/features/leave/CreateRequest.tsx`,
+  `client/src/features/leave/RequestDetail.tsx`, `client/src/styles/app.css`.
+- Verifikasi aktual: di `client/`, `npm run lint` PASS tanpa warning; `npm run
+  build` PASS (TypeScript dan Vite, 29 modul); root `git diff --check` PASS.
+  Tidak tersedia test runner di client.
+- Smoke test API/MinIO end-to-end belum dijalankan: Docker Compose menunjukkan
+  PostgreSQL sehat dan MinIO hidup, tetapi `curl -i --max-time 3
+  http://127.0.0.1:3001/api/v1/health` gagal tersambung (API belum berjalan).
+  Karena itu alur Parent/Teacher melalui browser dan unduh berkas belum
+  diverifikasi terhadap layanan hidup.
