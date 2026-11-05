@@ -1,0 +1,8 @@
+node_modules
+dist
+.prisma-tools
+.env
+.env.*
+coverage
+.git
+*.log

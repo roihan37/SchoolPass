@@ -830,3 +830,62 @@ pekerjaan berikutnya setelah persetujuan task baru.
 - Verifikasi: tinjau perintah terhadap `.nvmrc`, `.env.example`, `compose.yaml`,
   dan script npm; `git diff --check` PASS. Tidak menjalankan test karena hanya
   dokumentasi.
+
+## Registrasi dan gabung kelas Parent/Guru — 2026-11-05
+- Parent dan Guru dapat mendaftar dari halaman login tanpa kode kelas. Guru
+  dapat membuat beberapa kelas; setiap kelas mendapat kode acak yang hanya
+  ditampilkan saat dibuat dan hash-nya disimpan di PostgreSQL.
+- Parent dapat memasukkan kode kelas serta nama anak. Server mengikat record
+  Student ke Parent dari JWT, bukan dari ID yang dikirim browser. Satu Parent
+  dapat bergabung dengan beberapa kelas; daftar kelas/siswa tetap dibatasi oleh
+  kepemilikan akun. Dashboard kini menampilkan panel kelas sesuai peran dan
+  formulir pengajuan izin baru muncul setelah Parent memiliki siswa.
+- Skema dan migrasi mengubah keunikan nama kelas menjadi per Guru dan menambah
+  hash kode gabung. Kontrak API, requirements, arsitektur, database, project
+  brief, dan README diperbarui dengan alur/demo.
+- Verifikasi aktual: server lint PASS (0 warning/error), server unit PASS
+  (5 file, 17 test), server build PASS, client lint PASS (tanpa warning), dan
+  client build PASS. `npm run test:db` tidak dapat berjalan karena PostgreSQL
+  test di `127.0.0.1:55432` menolak koneksi; `docker compose ps` mengonfirmasi
+  Docker daemon tidak aktif. Jadi test integrasi HTTP/PostgreSQL baru ditulis,
+  tetapi belum dieksekusi. `git diff --check` menemukan trailing whitespace
+  lama pada `docker/minio/Dockerfile` yang termasuk perubahan awal pengguna;
+  tidak saya ubah. Tidak ada dependency baru atau commit.
+- Catatan batasan: pendaftaran Guru terbuka untuk publik dan belum memiliki
+  verifikasi/approval sekolah. Pengikatan siswa saat ini merepresentasikan satu
+  record Student untuk satu kelas; bila satu anak perlu tercatat di beberapa
+  kelas, Parent memasukkan data anak itu pada tiap kelas.
+
+## Sidebar kelas dan direktori siswa — 2026-11-05
+- Sidebar kini memiliki tautan “Kelas & siswa” yang menuju panel kelas. Panel
+  menampilkan kelas yang dimiliki Guru atau diikuti Parent, dengan daftar siswa
+  per kelas yang dapat dibuka dari tiap kartu kelas.
+- Guru melihat nama dan email Parent untuk siswa di kelas miliknya; endpoint
+  `/students/assigned` membatasi query ke kelas milik Guru dan hanya memilih
+  field kontak yang diperlukan. Parent melihat anak sendiri dan nama akun
+  Parent-nya; daftar siswa Parent tetap dibatasi oleh identitas autentikasi.
+- Menambahkan pengujian integrasi bahwa data Parent siswa tersedia untuk Guru
+  yang berwenang dan email Parent dari kelas lain tidak bocor. Perbaikan cleanup
+  fixture test menghapus siswa dari kelas uji sebelum menghapus akun uji.
+- Verifikasi aktual: client `npm run lint` PASS dan `npm run build` PASS; server
+  `npm run lint` PASS (0 warning/error), `npm run build` PASS, dan
+  `npm run test:db` PASS (4 file, 86 test). Sebelum test DB, tiga akun uji
+  sintetis tertinggal di database khusus `schoolpass_test`; hanya akun bernama
+  fixture uji beserta data terkait yang dibersihkan. Tidak ada test runner FE
+  atau browser automation, jadi navigasi dan tampilan belum diverifikasi lewat
+  browser otomatis. Tidak ada dependency baru atau commit.
+
+## Halaman Kelas & siswa — 2026-11-05
+- Menu Kelas & siswa kini membuka tampilan tersendiri, bukan hanya anchor di
+  halaman izin. Judul dan breadcrumb mengikuti navigasi; hash URL mendukung
+  reload serta Back/Forward. Detail izin hanya muncul pada halaman permintaan.
+- Halaman memakai API kelas dan siswa yang sudah tersedia. Guru melihat roster
+  beserta kontak Parent, sementara Parent hanya melihat anaknya sendiri.
+  Roster langsung terbuka, jumlah kelas ditampilkan, dan tersedia Perbarui serta
+  Coba lagi ketika pengambilan data gagal. Parent tanpa anak mendapat tautan
+  Gabung kelas dari halaman izin.
+- Verifikasi aktual: `npm run lint --prefix client` PASS;
+  `npm run build --prefix client` PASS (termasuk TypeScript). Pemeriksaan diff
+  file frontend yang diubah PASS. Tidak ada test runner frontend; interaksi
+  browser belum diuji dalam perubahan ini. Tidak mengubah backend, dependency,
+  atau membuat commit.

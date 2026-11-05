@@ -269,6 +269,15 @@ describe('authentication and ownership (real PostgreSQL + HTTP)', () => {
       response.body.map((student: { id: string }) => student.id).sort(),
     ).toEqual([ids.student, ids.otherStudent].sort());
     expect(JSON.stringify(response.body)).not.toContain('passwordHash');
+    expect(response.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: ids.student,
+          parent: expect.objectContaining({ email: email(ids.parent) }),
+        }),
+      ]),
+    );
+    expect(JSON.stringify(response.body)).not.toContain(email(ids.unassignedStudent));
     await get('students/assigned', parentToken).expect(403);
     await request(app.getHttpServer())
       .get('/api/v1/students/assigned')
@@ -282,13 +291,68 @@ describe('authentication and ownership (real PostgreSQL + HTTP)', () => {
     const token = await jwt.signAsync({ sub: ids.empty, role: 'PARENT' });
     await get('students/mine', token).expect(403);
   });
-  it('keeps liveness public and exposes no registration', async () => {
+  it('keeps liveness public', async () => {
     await request(app.getHttpServer())
       .get('/api/v1/health')
       .expect(200)
       .expect({ status: 'ok' });
-    await request(app.getHttpServer())
-      .post('/api/v1/auth/register')
-      .expect(404);
+  });
+  it('registers both roles and supports teacher multi-class / parent multi-class enrollment', async () => {
+    const teacher = randomUUID();
+    const parent = randomUUID();
+    const anotherParent = randomUUID();
+    const register = async (id: string, role: 'PARENT' | 'TEACHER') =>
+      request(app.getHttpServer())
+        .post('/api/v1/auth/register')
+        .send({ name: `Akun Uji ${role}`, email: email(id), password, role })
+        .expect(201);
+    const teacherResult = await register(teacher, 'TEACHER');
+    const parentResult = await register(parent, 'PARENT');
+    const anotherParentResult = await register(anotherParent, 'PARENT');
+    const teacherAuth = teacherResult.body.accessToken as string;
+    const parentAuth = parentResult.body.accessToken as string;
+    const anotherParentAuth = anotherParentResult.body.accessToken as string;
+    const post = (path: string, token: string, body: object) =>
+      request(app.getHttpServer())
+        .post(`/api/v1/${path}`)
+        .auth(token, { type: 'bearer' })
+        .send(body);
+    const createdClasses: Array<{ id: string; name: string; classCode: string }> = [];
+    try {
+      expect(teacherResult.body.user.role).toBe('TEACHER');
+      expect(parentResult.body.user.role).toBe('PARENT');
+      const first = await post('classes', teacherAuth, { name: 'Kelas Satu' }).expect(201);
+      const second = await post('classes', teacherAuth, { name: 'Kelas Dua' }).expect(201);
+      createdClasses.push(first.body, second.body);
+      expect(first.body.classCode).toBeTruthy();
+      expect(second.body.classCode).not.toBe(first.body.classCode);
+      await post('classes/enroll', parentAuth, { classCode: first.body.classCode, studentName: 'Anak Satu' }).expect(201);
+      await post('classes/enroll', parentAuth, { classCode: second.body.classCode, studentName: 'Anak Dua' }).expect(201);
+      await post('classes/enroll', anotherParentAuth, { classCode: first.body.classCode, studentName: 'Anak Tiga' }).expect(201);
+      const parentClasses = await get('classes/mine', parentAuth).expect(200);
+      expect(parentClasses.body.map((item: { name: string }) => item.name).sort()).toEqual(['Kelas Dua', 'Kelas Satu']);
+      const teacherClasses = await get('classes/mine', teacherAuth).expect(200);
+      expect(teacherClasses.body).toHaveLength(2);
+      expect(teacherClasses.body[0]._count.students + teacherClasses.body[1]._count.students).toBe(3);
+      expect(JSON.stringify(teacherClasses.body)).not.toContain(first.body.classCode);
+      await post('classes', parentAuth, { name: 'Tidak Diizinkan' }).expect(403);
+      await post('classes/enroll', teacherAuth, { classCode: first.body.classCode, studentName: 'Siswa' }).expect(403);
+      await post('classes/enroll', parentAuth, { classCode: 'KELAS-kode-tidak-valid', studentName: 'Siswa' }).expect(404);
+      const enrolled = await get('students/mine', parentAuth).expect(200);
+      expect(enrolled.body.map((item: { name: string }) => item.name).sort()).toEqual(['Anak Dua', 'Anak Satu']);
+    } finally {
+      await prisma.$transaction(async (tx) => {
+        await tx.student.deleteMany({
+          where: {
+            OR: [
+              { parentId: { in: [parent, anotherParent] } },
+              { classId: { in: createdClasses.map(item => item.id) } },
+            ],
+          },
+        });
+        await tx.schoolClass.deleteMany({ where: { id: { in: createdClasses.map(item => item.id) } } });
+        await tx.user.deleteMany({ where: { id: { in: [teacher, parent, anotherParent] } } });
+      });
+    }
   });
 });

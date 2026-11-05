@@ -15,7 +15,31 @@ const bucket = () => process.env.MINIO_BUCKET ?? 'schoolpass-private';
 
 @Injectable()
 export class MinioStorageService {
-  constructor(@Inject(S3_CLIENT) private readonly client: S3Client) {}
+  private readonly signingClient: S3Client;
+
+  constructor(
+    @Inject(S3_CLIENT)
+    private readonly client: S3Client,
+  ) {
+    this.signingClient = new S3Client({
+      endpoint:
+        process.env.MINIO_PUBLIC_ENDPOINT ??
+        process.env.MINIO_ENDPOINT ??
+        'http://127.0.0.1:9000',
+      region: 'us-east-1',
+      forcePathStyle: true,
+      credentials: {
+        accessKeyId:
+          process.env.MINIO_ACCESS_KEY ??
+          process.env.MINIO_ROOT_USER ??
+          '',
+        secretAccessKey:
+          process.env.MINIO_SECRET_KEY ??
+          process.env.MINIO_ROOT_PASSWORD ??
+          '',
+      },
+    });
+  }
 
   async put(file: { buffer: Buffer; mimeType: string }) {
     const objectKey = `attachments/${randomUUID()}`;
@@ -39,7 +63,7 @@ export class MinioStorageService {
 
   async signDownload(objectKey: string) {
     return getSignedUrl(
-      this.client,
+      this.signingClient,
       new GetObjectCommand({
         Bucket: bucket(),
         Key: objectKey,

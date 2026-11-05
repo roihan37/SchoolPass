@@ -29,7 +29,8 @@
 .brand-icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: 11px 11px 11px 4px; background: var(--primary); color: white; font-family: Georgia, serif; font-size: 23px; }
 .sidebar-label, .eyebrow { color: #73877f; font-size: 10px; font-weight: 750; letter-spacing: 1.15px; }
 .sidebar-label { margin: 46px 10px 12px; }
-.nav-item { display: flex; min-height: 44px; align-items: center; gap: 11px; padding: 0 11px; border-radius: var(--radius-sm); color: var(--ink-soft); font-size: 13px; font-weight: 650; }
+.nav-item { display: flex; min-height: 44px; align-items: center; gap: 11px; padding: 0 11px; border-radius: var(--radius-sm); color: var(--ink-soft); font-size: 13px; font-weight: 650; text-decoration: none; transition: background-color .15s ease, color .15s ease; }
+.nav-item:hover { background: var(--surface-soft); color: var(--primary-hover); }
 .nav-active { background: var(--primary-soft); color: var(--primary-hover); }
 .nav-icon { font-size: 18px; }
 .nav-count { display: grid; min-width: 23px; height: 23px; margin-left: auto; place-items: center; border-radius: 7px; background: white; color: var(--primary-hover); font-size: 11px; }
@@ -101,6 +102,32 @@
 .summary-note { margin-left: auto; align-self: flex-end; color: #82928b; font-size: 10px; white-space: nowrap; }
 .notice { padding: 12px 14px; margin-bottom: 14px; border: 1px solid #f0d0cd; border-radius: var(--radius-sm); background: var(--danger-soft); color: #8e3935; font-size: 13px; line-height: 1.55; }
 .notice-success { border-color: #cde4d2; background: var(--success-soft); color: var(--success); }
+.classroom-card { padding: 20px; margin-bottom: 20px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); box-shadow: var(--shadow-card); }
+.classroom-heading h3 { margin: 6px 0 4px; color: var(--ink); font-size: 16px; }
+.classroom-heading p { margin: 0 0 16px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.classroom-form { display: flex; align-items: end; gap: 12px; }
+.classroom-form .form-control { flex: 1; }
+.classroom-list { padding-top: 15px; margin-top: 16px; border-top: 1px solid var(--line); }
+.classroom-list h4 { margin: 0 0 10px; color: var(--ink-soft); font-size: 12px; }
+.classroom-items, .roster-list { display: grid; gap: 9px; padding: 0; margin: 0; list-style: none; }
+.classroom-item { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-soft); color: var(--ink); font-size: 12px; }
+.classroom-item-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.classroom-item-heading > span:first-child, .roster-student > span:last-child, .roster-parent { display: grid; gap: 4px; }
+.classroom-count { flex: 0 0 auto; padding: 4px 8px; border-radius: 999px; background: white; color: var(--ink-soft); font-size: 11px; }
+.classroom-roster { padding-top: 9px; border-top: 1px solid var(--line); }
+.classroom-roster summary { width: fit-content; color: var(--primary-hover); font-size: 12px; font-weight: 700; cursor: pointer; }
+.classroom-roster[open] summary { margin-bottom: 10px; }
+.roster-list { gap: 7px; }
+.roster-item { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: white; }
+.roster-student { display: flex; align-items: center; gap: 9px; }
+.roster-student strong, .roster-parent strong { color: var(--ink); font-size: 12px; }
+.roster-student small, .roster-parent small, .roster-parent a { color: var(--muted); font-size: 11px; }
+.roster-parent a { width: fit-content; text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.classroom-list small, .classroom-state { color: var(--muted); font-size: 11px; }
+.classroom-state { margin: 0; line-height: 1.5; }
+.class-code { display: flex; align-items: center; gap: 10px; padding: 11px 12px; margin: 14px 0; border: 1px solid #cde4d2; border-radius: 9px; background: var(--success-soft); color: var(--success); font-size: 12px; }
+.class-code strong { font-size: 15px; letter-spacing: .5px; }
+.class-code button { padding: 5px 8px; margin-left: auto; border: 1px solid #b9d8c1; border-radius: 6px; background: white; color: var(--success); font: inherit; cursor: pointer; }
 .notice-action { padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .create-card, .list-section { border: 1px solid var(--line); border-radius: 15px; background: var(--surface); box-shadow: var(--shadow-card); }
 .create-card { padding: 22px; margin-bottom: 20px; }
@@ -218,6 +245,9 @@ tbody tr:hover, tbody tr.selected-row { background: #f5faf7; }
 .label-spaced { margin-top: 17px; }
 .submit-button { min-height: 47px; margin-top: 22px; font-size: 14px; }
 .submit-button span { margin-left: auto; font-size: 17px; }
+.auth-switch { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 5px 8px; padding-top: 17px; margin: 20px 0 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; text-align: center; }
+.auth-switch button { padding: 4px 6px; border: 0; border-radius: 5px; background: transparent; color: var(--primary-hover); font: inherit; font-weight: 750; cursor: pointer; }
+.auth-switch button:hover { background: var(--primary-soft); }
 .login-help { display: flex; align-items: center; gap: 9px; padding: 12px; margin-top: 20px; border-radius: var(--radius-sm); background: #eff6f1; color: var(--ink-soft); font-size: 11px; line-height: 1.5; }
 .login-help .help-icon { width: 19px; height: 19px; flex-basis: 19px; font-size: 10px; }
 .login-footer { margin-top: auto; padding-top: 32px; color: #758780; font-size: 11px; }
@@ -233,6 +263,10 @@ tbody tr:hover, tbody tr.selected-row { background: #f5faf7; }
   .form-control-wide { grid-column: span 2; }
 }
 @media (max-width: 760px) {
+  .classroom-form { align-items: stretch; flex-direction: column; }
+  .classroom-form > .button { width: 100%; }
+  .roster-item { grid-template-columns: minmax(0, 1fr); }
+  .class-code { align-items: flex-start; flex-wrap: wrap; }
   .app-shell { padding: 0 0 20px; }
   .sidebar { position: static; width: 100%; min-height: 58px; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: space-between; padding: 10px 18px 0; border-right: 0; border-bottom: 1px solid var(--line); }
   .brand { font-size: 17px; }

@@ -1,14 +1,16 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../../infrastructure/database/prisma.service.js';
 import { identitySelect } from '../../common/auth/auth.identity.js';
+import type { CurrentIdentity } from '../../common/auth/auth.identity.js';
 import {
   hashPassword,
   verifyPassword,
 } from '../../common/security/password.js';
 import type { LoginDto } from './dto/login.dto.js';
 import { LoginAttemptLimiterService } from './login-attempt-limiter.service.js';
+import type { RegisterDto } from './dto/register.dto.js';
 
 @Injectable()
 export class AuthService {
@@ -42,5 +44,21 @@ export class AuthService {
       expiresIn: 900,
       user: identity,
     };
+  }
+
+  async register(input: RegisterDto) {
+    const passwordHash = await hashPassword(input.password);
+    let user: CurrentIdentity;
+    try {
+      user = await this.prisma.user.create({
+        data: { name: input.name, email: input.email, passwordHash, role: input.role },
+        select: identitySelect,
+      });
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'P2002')
+        throw new ConflictException('Email sudah terdaftar.');
+      throw error;
+    }
+    return { accessToken: await this.jwt.signAsync({ sub: user.id }), tokenType: 'Bearer', expiresIn: 900, user };
   }
 }

@@ -331,8 +331,24 @@ PORT=3001 npm run start:dev
 Seed memakai email `parent.a@example.test`, `parent.b@example.test`, dan
 `teacher@example.test`. Password semua akun demo adalah nilai `SEED_PASSWORD`
 terkini; jalankan ulang `npm run prisma:seed` setelah mengubah nilai tersebut.
-Tidak ada registrasi publik. Login mengembalikan `accessToken`, `tokenType: Bearer`,
-`expiresIn: 900` detik dan `user` tanpa hash. Login memakai email persis seperti seed.
+Login dan pendaftaran mengembalikan `accessToken`, `tokenType: Bearer`,
+`expiresIn: 900` detik dan `user` tanpa hash. Untuk akun baru, pilih **Daftar**
+di halaman masuk, isi nama, email, kata sandi minimal 8 karakter, dan pilih
+Orang tua atau Guru. Pendaftaran tidak meminta kode kelas. Akun seed di atas
+tetap tersedia untuk demo alur izin.
+
+### Demo kelas Parent dan Guru
+
+1. Buat akun Guru lewat **Daftar**, lalu masuk. Di panel **Kelas yang Anda ajar**,
+   buat satu atau beberapa kelas. Salin kode gabung yang muncul setelah kelas dibuat.
+2. Keluar, lalu buat akun Orang tua dan masuk. Di panel **Kelas anak Anda**,
+   masukkan kode dari Guru dan nama anak. Ulangi untuk kelas lain bila diperlukan.
+3. Anak yang dimasukkan Parent akan muncul di daftar siswa Parent; Guru melihat
+   jumlah siswa di kelasnya. Kode kelas dapat dipakai beberapa keluarga dan
+   disimpan sebagai hash di database.
+
+Untuk mencoba membuat pengajuan izin, masuk sebagai Parent yang sudah bergabung
+ke kelas. Parent hanya dapat mengajukan atas siswa yang terhubung ke akunnya.
 
 Untuk memeriksa login dan akses anak tanpa memasukkan password/token ke command history,
 jalankan di terminal lain dari `server/`:

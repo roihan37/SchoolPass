@@ -18,7 +18,7 @@ NestJS also calls MinIO object storage and Redis; BullMQ worker process consumes
 Thin controllers, services own business logic, centralized Prisma access, DTO validation, guards plus record-level authorization in services. No external production credentials.
 
 ### Backend layout (implemented through Phase 06)
-- `server/src/modules/`: feature modules `auth`, `students`, `leave-requests`, and operational `health`.
+- `server/src/modules/`: feature modules `auth`, `classes`, `students`, `leave-requests`, and operational `health`.
   Controllers handle HTTP; services own business rules and record-level authorization.
   Login DTO lives in `auth/dto/`; unit tests live beside their tested components.
 - `server/src/infrastructure/database/`: PrismaModule, PrismaService, and database
@@ -71,4 +71,4 @@ React + Vite + TypeScript; use a small consistent design system (Button, TextInp
 Start with npm for fewer toolchains. Choose supported Node LTS and pin compatible versions. Document ESM/Prisma choices; no accidental major upgrade or mixing tutorials. Local Compose runs PostgreSQL, MinIO, and Redis.
 
 ## Security and reliability
-JWT secrets stay local in .env (ignored); hash passwords. Avoid logging sensitive token/file data. File upload: size/type verification, private bucket, secure object keys, authorized access. Worker retries must not create duplicates. No public enrollment; seed only.
+JWT secrets stay local in .env (ignored); hash passwords. Avoid logging sensitive token/file data. File upload: size/type verification, private bucket, secure object keys, authorized access. Worker retries must not create duplicates. Public registration permits only Parent and Teacher roles. Class join codes are high entropy, stored as hashes, reusable, and should be shared only with intended families; student ownership is always assigned from the authenticated Parent identity.

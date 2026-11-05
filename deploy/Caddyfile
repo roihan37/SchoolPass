@@ -1,0 +1,25 @@
+schoolpass-app.duckdns.org {
+    encode zstd gzip
+
+    handle /api/* {
+        reverse_proxy api:3000
+    }
+
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}
+
+schoolpass-files.duckdns.org {
+    @download method GET
+
+    handle @download {
+        reverse_proxy minio:9000
+    }
+
+    handle {
+        respond "Forbidden" 403
+    }
+}

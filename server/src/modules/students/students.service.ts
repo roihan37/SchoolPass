@@ -29,6 +29,7 @@ export class StudentsService {
         name: true,
         classId: true,
         schoolClass: { select: { id: true, name: true } },
+        parent: { select: { name: true, email: true } },
       },
       orderBy: { id: 'asc' },
     });

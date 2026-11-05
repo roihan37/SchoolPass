@@ -14,6 +14,7 @@ export interface Student {
   name: string
   classId: string
   schoolClass: { id: string; name: string }
+  parent?: { name: string; email: string }
 }
 
 export interface LeaveRequest {
@@ -58,7 +59,11 @@ export interface DashboardSummary {
   classes: Array<{ classId: string; className: string; total: number; pending: number; approved: number; rejected: number }>
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:3001/api/v1'
+export interface SchoolClass { id: string; name: string; teacher?: { name: string }; _count?: { students: number } }
+export interface CreatedClass { id: string; name: string; classCode: string }
+export interface EnrolledStudent { id: string; name: string; classId: string }
+
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 
 export class ApiError extends Error {
   readonly status: number
@@ -110,6 +115,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
+  register: (body: { name: string; email: string; password: string; role: Role }) =>
+    request<{ accessToken: string; user: User }>('/auth/register', undefined, { method: 'POST', body: JSON.stringify(body) }),
+  classes: (token: string) => request<SchoolClass[]>('/classes/mine', token),
+  createClass: (token: string, name: string) => request<CreatedClass>('/classes', token, { method: 'POST', body: JSON.stringify({ name }) }),
+  enrollStudent: (token: string, classCode: string, studentName: string) => request<EnrolledStudent>('/classes/enroll', token, { method: 'POST', body: JSON.stringify({ classCode, studentName }) }),
   me: (token: string) => request<User>('/auth/me', token),
   students: (token: string) => request<Student[]>('/students/mine', token),
   assignedStudents: (token: string) => request<Student[]>('/students/assigned', token),

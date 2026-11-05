@@ -1,6 +1,15 @@
-FROM golang:1.24-bookworm AS build
-RUN CGO_ENABLED=0 go install -trimpath github.com/minio/minio@7aac2a2c5b7c882e68c1ce017d8256be2feea27f
+# syntax=docker/dockerfile:1
+FROM --platform=$BUILDPLATFORM golang:1.24-bookworm AS build
 
+ARG TARGETOS
+ARG TARGETARCH
+
+RUN CGO_ENABLED=0 \
+    GOOS=$TARGETOS \
+    GOARCH=$TARGETARCH \
+    go install -trimpath \
+    github.com/minio/minio@7aac2a2c5b7c882e68c1ce017d8256be2feea27f
+    
 FROM debian:bookworm-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \

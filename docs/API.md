@@ -6,7 +6,11 @@ Prefix: `/api/v1`. Require JWT except login and public liveness `/health`. Phase
 |---|---|---|---|
 | GET | /health | Public | Liveness: 200 with `{ "status": "ok" }` |
 | POST | /auth/login | Public | Authenticate email/password, issue JWT |
+| POST | /auth/register | Public | Register Parent or Teacher and issue JWT |
 | GET | /auth/me | Auth | Identity and role |
+| GET | /classes/mine | Parent/Teacher | Classes joined by Parent or owned by Teacher |
+| POST | /classes | Teacher | Create a class and return its join code once |
+| POST | /classes/enroll | Parent | Enroll a child using a class code |
 | GET | /students/mine | Parent | Own children only |
 | GET | /students/assigned | Teacher | Students in own assigned classes |
 | POST | /leave-requests | Parent | One-day request, status=PENDING |
@@ -22,6 +26,23 @@ Expected errors: validation 400; authentication 401; forbidden 403; not found 40
 
 Example request: POST /leave-requests JSON `{ "studentId": "<uuid>", "absenceDate": "2026-11-04", "type": "SICK", "reason": "Demam" }`.
 Example decision: PATCH /leave-requests/:id/decision JSON `{ "status": "REJECTED", "decisionReason": "Lampiran perlu diperbarui" }`.
+
+## Registration and classroom contract
+
+- `POST /auth/register`: public JSON `{ name, email, password, role }`; role is
+  `PARENT` or `TEACHER`, name 2–100 chars, password 8–256 chars, email valid
+  and at most 254 chars. Unknown fields are rejected. Email is normalized to
+  lowercase, password is hashed, duplicate email returns 409. Success is 201
+  with the same token/user shape as login; no class code is needed.
+- `POST /classes`: Teacher only, JSON `{ name }` (2–80 chars). The class name
+  is unique per Teacher. Success is 201 `{ id, name, classCode }`; the code is
+  shown once and is not returned in later class lists.
+- `POST /classes/enroll`: Parent only, JSON `{ classCode, studentName }`.
+  Success is 201 `{ id, name, classId }`. The server finds the class by the
+  hash of its join code and assigns `parentId` from the authenticated identity.
+  Invalid code returns 404; other roles receive 403. Codes are reusable.
+- `GET /classes/mine`: Parent receives their child's classes, Teacher receives
+  owned classes and student counts. Neither response includes join code hashes.
 
 ## Phase 02 — implemented authentication contract
 
@@ -39,14 +60,15 @@ Example decision: PATCH /leave-requests/:id/decision JSON `{ "status": "REJECTED
 - `GET /students/mine`: Parent saja; 200 array `{ id, name, classId, schoolClass: { id, name } }`,
   urutan `id` ascending; tanpa anak => `[]`. Filter `parentId` selalu dari identitas
   terverifikasi server. Query parameter tidak dapat mengganti pemilik data. Teacher => 403.
-- `GET /students/assigned`: Teacher saja; bentuk respons sama dengan `/students/mine`,
-  tetapi hanya memuat siswa dari kelas yang ditugaskan kepada guru terautentikasi.
-  Parent => 403.
+- `GET /students/assigned`: Teacher saja; hanya memuat siswa dari kelas yang
+  ditugaskan kepada guru terautentikasi, dengan nama dan email Parent terkait
+  agar guru dapat menghubungi keluarga dari daftar kelas. Data Parent hanya
+  disertakan pada endpoint ini dan tidak keluar dari kelas milik guru. Parent => 403.
 - Semua route yang diimplementasikan dilindungi guard secara default kecuali health/login.
   JWT diperiksa signature HS256, expiry wajib, issuer `schoolpass`, audience
   `schoolpass-api`, dan UUID subject. Masa berlaku 900 detik. Role terbaru dibaca dari
   database, bukan dipercaya dari klaim role token. JWT hilang/tidak valid => 401.
-- Tidak ada registrasi, refresh token, atau endpoint logout pada fase ini.
+- Refresh token dan endpoint logout belum tersedia.
   Workflow pengajuan izin, lampiran, dashboard cache, dan in-app notifications
   sudah diimplementasikan. Rate limit login menggunakan Redis; bila Redis tidak
   tersedia, login gagal tertutup dengan 503 sampai koneksi pulih.

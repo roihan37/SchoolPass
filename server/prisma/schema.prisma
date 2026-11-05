@@ -46,11 +46,13 @@ model User {
 
 model SchoolClass {
   id        String    @id @default(uuid()) @db.Uuid
-  name      String    @unique
+  name      String
   teacherId String    @db.Uuid
   teacher   User      @relation(fields: [teacherId], references: [id], onDelete: Restrict)
   students  Student[]
+  joinCodeHash String? @unique
 
+  @@unique([teacherId, name])
   @@index([teacherId])
 }
 

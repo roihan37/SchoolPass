@@ -13,6 +13,7 @@ import type { Request } from 'express';
 import { AuthService } from './auth.service.js';
 import { CurrentUser, Public } from '../../common/auth/auth.decorators.js';
 import { LoginDto } from './dto/login.dto.js';
+import { RegisterDto } from './dto/register.dto.js';
 
 @Controller('auth')
 export class AuthController {
@@ -37,6 +38,14 @@ export class AuthController {
       body,
       request.ip ?? request.socket.remoteAddress ?? 'unknown',
     );
+  }
+
+  @Public()
+  @Post('register')
+  register(
+    @Body(new ValidationPipe({ expectedType: RegisterDto, whitelist: true, forbidNonWhitelisted: true, transform: true })) body: RegisterDto,
+  ) {
+    return this.auth.register(body);
   }
 
   @Get('me')
